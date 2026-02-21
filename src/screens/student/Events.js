@@ -1,12 +1,79 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
-import { Text } from 'react-native-paper';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshControl } from 'react-native';
+import { Text, ActivityIndicator } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { getUpcomingEvents, subscribeToEvents } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
 export default function EventsScreen({ navigation }) {
+    const [events, setEvents] = useState([]);
+    const [featuredEvent, setFeaturedEvent] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const loadEvents = async () => {
+        try {
+            const data = await getUpcomingEvents();
+            setEvents(data);
+
+            // Find a featured event, or default to the first one
+            const featured = data.find(e => e.isFeatured) || data[0];
+            setFeaturedEvent(featured);
+        } catch (error) {
+            console.error("Error loading events:", error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        loadEvents();
+
+        // Real-time subscription for updates
+        const unsubscribe = subscribeToEvents((updatedEvents) => {
+            setEvents(updatedEvents);
+            const featured = updatedEvents.find(e => e.isFeatured) || updatedEvents[0];
+            setFeaturedEvent(featured);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        loadEvents();
+    };
+
+    // Helper to get icon based on event type
+    const getEventIcon = (type) => {
+        switch (type?.toLowerCase()) {
+            case 'technical': return { name: 'code-tags', color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' };
+            case 'cultural': return { name: 'music-note', color: '#db2777', bg: '#fdf2f8', border: '#fbcfe8' };
+            case 'seminar': return { name: 'brain', color: '#ea580c', bg: '#fff7ed', border: '#ffedd5' };
+            case 'sports': return { name: 'soccer', color: '#0055ff', bg: '#eff6ff', border: '#dbeafe' };
+            default: return { name: 'calendar', color: '#5e6d8d', bg: '#f3f4f6', border: '#e5e7eb' };
+        }
+    };
+
+    const getMonthAndDay = (dateString = "") => {
+        // Simple heuristic parser for "Nov 15" or "2023-11-15"
+        // For now, assuming the string might contain the month name
+        const parts = dateString.split(' ');
+        if (parts.length >= 2) return { month: parts[0].substring(0, 3).toUpperCase(), day: parts[1].replace(',', '') };
+        return { month: 'EVT', day: '01' };
+    };
+
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#0055ff" />
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
             {/* Header */}
@@ -22,52 +89,58 @@ export default function EventsScreen({ navigation }) {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
 
                 {/* Featured Event Hero Card */}
-                <LinearGradient
-                    colors={['#0055ff', '#0033cc']}
-                    style={styles.heroCard}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                >
-                    <View style={styles.heroDecoration} />
+                {featuredEvent && (
+                    <LinearGradient
+                        colors={['#0055ff', '#0033cc']}
+                        style={styles.heroCard}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                    >
+                        <View style={styles.heroDecoration} />
 
-                    <View style={styles.heroTop}>
-                        <View style={styles.heroContent}>
-                            <View style={styles.featuredBadge}>
-                                <MaterialCommunityIcons name="lightning-bolt" size={12} color="#fde047" />
-                                <Text style={styles.featuredText}>FEATURED</Text>
+                        <View style={styles.heroTop}>
+                            <View style={styles.heroContent}>
+                                <View style={styles.featuredBadge}>
+                                    <MaterialCommunityIcons name="lightning-bolt" size={12} color="#fde047" />
+                                    <Text style={styles.featuredText}>FEATURED</Text>
+                                </View>
+                                <Text style={styles.heroTitle}>{featuredEvent.title}</Text>
+                                <Text style={styles.heroSubtitle}>{featuredEvent.date} • {featuredEvent.location}</Text>
                             </View>
-                            <Text style={styles.heroTitle}>TechFest '24</Text>
-                            <Text style={styles.heroSubtitle}>Nov 15 - 16 • Main Auditorium</Text>
+
+                            <View style={styles.dateBadgeLarge}>
+                                <Text style={styles.dateBadgeMonth}>{getMonthAndDay(featuredEvent.date).month}</Text>
+                                <Text style={styles.dateBadgeDay}>{getMonthAndDay(featuredEvent.date).day}</Text>
+                            </View>
                         </View>
 
-                        <View style={styles.dateBadgeLarge}>
-                            <Text style={styles.dateBadgeMonth}>NOV</Text>
-                            <Text style={styles.dateBadgeDay}>15</Text>
+                        <View style={styles.heroGrid}>
+                            <View style={styles.heroGridItem}>
+                                <Text style={styles.gridLabel}>EVENTS</Text>
+                                <Text style={styles.gridValue}>{featuredEvent.stats?.events || '5+'}</Text>
+                            </View>
+                            <View style={styles.heroGridItem}>
+                                <Text style={styles.gridLabel}>WORKSHOPS</Text>
+                                <Text style={styles.gridValue}>{featuredEvent.stats?.workshops || '2'}</Text>
+                            </View>
+                            <View style={styles.heroGridItem}>
+                                <Text style={styles.gridLabel}>ENTRY</Text>
+                                <Text style={styles.gridValue}>{featuredEvent.stats?.entry || 'Free'}</Text>
+                            </View>
                         </View>
-                    </View>
 
-                    <View style={styles.heroGrid}>
-                        <View style={styles.heroGridItem}>
-                            <Text style={styles.gridLabel}>EVENTS</Text>
-                            <Text style={styles.gridValue}>12+</Text>
-                        </View>
-                        <View style={styles.heroGridItem}>
-                            <Text style={styles.gridLabel}>WORKSHOPS</Text>
-                            <Text style={styles.gridValue}>5</Text>
-                        </View>
-                        <View style={styles.heroGridItem}>
-                            <Text style={styles.gridLabel}>ENTRY</Text>
-                            <Text style={styles.gridValue}>Free</Text>
-                        </View>
-                    </View>
-
-                    <TouchableOpacity style={styles.registerButton}>
-                        <Text style={styles.registerButtonText}>Register Now</Text>
-                    </TouchableOpacity>
-                </LinearGradient>
+                        <TouchableOpacity style={styles.registerButton}>
+                            <Text style={styles.registerButtonText}>Register Now</Text>
+                        </TouchableOpacity>
+                    </LinearGradient>
+                )}
 
                 {/* Upcoming Events List */}
                 <View style={styles.sectionHeader}>
@@ -79,173 +152,63 @@ export default function EventsScreen({ navigation }) {
                 </View>
 
                 <View style={styles.eventsList}>
-
-                    {/* Event 1 - Hackathon */}
-                    <TouchableOpacity style={styles.eventCard}>
-                        <View style={styles.eventCardHeader}>
-                            <View style={[styles.eventIconBox, { backgroundColor: '#f5f3ff', borderColor: '#ddd6fe', color: '#7c3aed' }]}>
-                                <MaterialCommunityIcons name="code-tags" size={24} color="#7c3aed" />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <View>
-                                        <Text style={styles.eventName}>Hackathon 2023</Text>
-                                        <View style={styles.eventTimeBadge}>
-                                            <Text style={styles.eventTimeText}>Oct 24 • 9:00 AM</Text>
+                    {events.map((item, index) => {
+                        const iconData = getEventIcon(item.type);
+                        return (
+                            <TouchableOpacity key={item.id || index} style={[styles.eventCard, item.isRegistered && { opacity: 0.95 }]}>
+                                {item.isRegistered && (
+                                    <View style={styles.registeredCheck}>
+                                        <MaterialCommunityIcons name="check" size={14} color="white" />
+                                    </View>
+                                )}
+                                <View style={styles.eventCardHeader}>
+                                    <View style={[styles.eventIconBox, { backgroundColor: iconData.bg, borderColor: iconData.border }]}>
+                                        <MaterialCommunityIcons name={iconData.name} size={24} color={iconData.color} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <View>
+                                                <Text style={styles.eventName}>{item.title}</Text>
+                                                <View style={styles.eventTimeBadge}>
+                                                    <Text style={styles.eventTimeText}>{item.date} • {item.time}</Text>
+                                                </View>
+                                            </View>
+                                            <View style={styles.activeDot} />
                                         </View>
                                     </View>
-                                    <View style={styles.activeDot} />
                                 </View>
-                            </View>
-                        </View>
 
-                        <Text style={styles.eventDescription} numberOfLines={2}>
-                            24-hour coding challenge. Form teams of 4 and solve real-world problems. Great prizes!
-                        </Text>
+                                <Text style={styles.eventDescription} numberOfLines={2}>
+                                    {item.description}
+                                </Text>
 
-                        <View style={styles.eventFooter}>
-                            <View style={styles.locationContainer}>
-                                <MaterialCommunityIcons name="map-marker-outline" size={14} color="#5e6d8d" />
-                                <Text style={styles.locationText}>Computer Lab 1</Text>
-                            </View>
-                            <TouchableOpacity style={styles.smallRegisterButton}>
-                                <Text style={styles.smallRegisterText}>Register</Text>
+                                <View style={styles.eventFooter}>
+                                    <View style={styles.locationContainer}>
+                                        <MaterialCommunityIcons name="map-marker-outline" size={14} color="#5e6d8d" />
+                                        <Text style={styles.locationText}>{item.location}</Text>
+                                    </View>
+                                    {item.isRegistered ? (
+                                        <View style={styles.registeredBadge}>
+                                            <Text style={styles.registeredText}>Registered</Text>
+                                        </View>
+                                    ) : (
+                                        <TouchableOpacity style={styles.smallRegisterButton}>
+                                            <Text style={styles.smallRegisterText}>Register</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
                             </TouchableOpacity>
-                        </View>
-                    </TouchableOpacity>
+                        );
+                    })}
 
-                    {/* Event 2 - Cultural Fiesta */}
-                    <TouchableOpacity style={styles.eventCard}>
-                        <View style={styles.eventCardHeader}>
-                            <View style={[styles.eventIconBox, { backgroundColor: '#fdf2f8', borderColor: '#fbcfe8', color: '#db2777' }]}>
-                                <MaterialCommunityIcons name="music-note" size={24} color="#db2777" />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <View>
-                                        <Text style={styles.eventName}>Cultural Fiesta</Text>
-                                        <View style={styles.eventTimeBadge}>
-                                            <Text style={styles.eventTimeText}>Oct 28 • 5:00 PM</Text>
-                                        </View>
-                                    </View>
-                                </View>
-                            </View>
-                        </View>
-
-                        <Text style={styles.eventDescription} numberOfLines={2}>
-                            Annual cultural evening featuring music, dance, and drama performances by students.
-                        </Text>
-
-                        <View style={styles.eventFooter}>
-                            <View style={styles.locationContainer}>
-                                <MaterialCommunityIcons name="map-marker-outline" size={14} color="#5e6d8d" />
-                                <Text style={styles.locationText}>Open Air Theatre</Text>
-                            </View>
-                            <TouchableOpacity style={styles.detailsButton}>
-                                <Text style={styles.detailsButtonText}>Details</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* Event 3 - AI Seminar */}
-                    <TouchableOpacity style={[styles.eventCard, { opacity: 0.95 }]}>
-                        <View style={styles.registeredCheck}>
-                            <MaterialCommunityIcons name="check" size={14} color="white" />
-                        </View>
-                        <View style={styles.eventCardHeader}>
-                            <View style={[styles.eventIconBox, { backgroundColor: '#fff7ed', borderColor: '#ffedd5', color: '#ea580c' }]}>
-                                <MaterialCommunityIcons name="brain" size={24} color="#ea580c" />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <View>
-                                        <Text style={styles.eventName}>AI Seminar</Text>
-                                        <View style={styles.eventTimeBadge}>
-                                            <Text style={styles.eventTimeText}>Nov 02 • 11:00 AM</Text>
-                                        </View>
-                                    </View>
-                                </View>
-                            </View>
-                        </View>
-
-                        <Text style={styles.eventDescription} numberOfLines={2}>
-                            Guest lecture on "Future of AI in Healthcare" by Dr. Roberts. Mandatory for CS students.
-                        </Text>
-
-                        <View style={styles.eventFooter}>
-                            <View style={styles.locationContainer}>
-                                <MaterialCommunityIcons name="map-marker-outline" size={14} color="#5e6d8d" />
-                                <Text style={styles.locationText}>Seminar Hall B</Text>
-                            </View>
-                            <View style={styles.registeredBadge}>
-                                <Text style={styles.registeredText}>Registered</Text>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* Event 4 - Inter-Dept Sports */}
-                    <TouchableOpacity style={styles.eventCard}>
-                        <View style={styles.eventCardHeader}>
-                            <View style={[styles.eventIconBox, { backgroundColor: '#eff6ff', borderColor: '#dbeafe', color: '#0055ff' }]}>
-                                <MaterialCommunityIcons name="soccer" size={24} color="#0055ff" />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <View>
-                                        <Text style={styles.eventName}>Inter-Dept Sports</Text>
-                                        <View style={styles.eventTimeBadge}>
-                                            <Text style={styles.eventTimeText}>Nov 05 • 3:00 PM</Text>
-                                        </View>
-                                    </View>
-                                </View>
-                            </View>
-                        </View>
-
-                        <Text style={styles.eventDescription} numberOfLines={2}>
-                            Football and Basketball selections for the college team. Bring your gear!
-                        </Text>
-
-                        <View style={styles.eventFooter}>
-                            <View style={styles.locationContainer}>
-                                <MaterialCommunityIcons name="map-marker-outline" size={14} color="#5e6d8d" />
-                                <Text style={styles.locationText}>Sports Ground</Text>
-                            </View>
-                            <TouchableOpacity style={styles.smallRegisterButton}>
-                                <Text style={styles.smallRegisterText}>Register</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </TouchableOpacity>
-
+                    {events.length === 0 && (
+                        <Text style={{ textAlign: 'center', color: '#9aa2b1', marginTop: 20 }}>No upcoming events.</Text>
+                    )}
                 </View>
 
                 {/* Spacer for bottom bar */}
-                <View style={{ height: 80 }} />
+                <View style={{ height: 20 }} />
             </ScrollView>
-
-            {/* Bottom Tab Bar (Custom) */}
-            <View style={styles.bottomBar}>
-                <View style={styles.tabItemsContainer}>
-                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Dashboard')}>
-                        <MaterialCommunityIcons name="view-dashboard-outline" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Home</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem}>
-                        <MaterialCommunityIcons name="calendar-month" size={26} color="#0055ff" />
-                        <Text style={[styles.tabLabel, { color: '#0055ff', fontWeight: 'bold' }]}>Events</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Placements')}>
-                        <MaterialCommunityIcons name="briefcase-outline" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Jobs</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem}>
-                        <MaterialCommunityIcons name="account-outline" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Profile</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
         </View>
     );
 }
@@ -307,15 +270,7 @@ const styles = StyleSheet.create({
     smallRegisterButton: { backgroundColor: '#0055ff', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, elevation: 2, shadowColor: '#0055ff', shadowOpacity: 0.3 },
     smallRegisterText: { color: 'white', fontSize: 12, fontWeight: '600' },
 
-    detailsButton: { backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb' },
-    detailsButtonText: { color: '#101318', fontSize: 12, fontWeight: '600' },
-
     registeredCheck: { position: 'absolute', top: -4, right: -4, width: 20, height: 20, borderRadius: 10, backgroundColor: '#22c55e', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'white', zIndex: 1, elevation: 2 },
     registeredBadge: { backgroundColor: '#f0fdf4', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#dcfce7' },
-    registeredText: { color: '#16a34a', fontSize: 12, fontWeight: 'bold' },
-
-    bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(255,255,255,0.9)', borderTopWidth: 1, borderTopColor: '#f3f4f6', height: 80, paddingBottom: 20 },
-    tabItemsContainer: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', height: '100%' },
-    tabItem: { alignItems: 'center', gap: 4, padding: 8, width: 64 },
-    tabLabel: { fontSize: 10, color: '#9aa2b1', fontWeight: '500' }
+    registeredText: { color: '#16a34a', fontSize: 12, fontWeight: 'bold' }
 });

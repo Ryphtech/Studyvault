@@ -1,58 +1,51 @@
-import React, { useContext } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions } from 'react-native';
-import { Text } from 'react-native-paper';
+import React, { useContext, useEffect, useState } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, RefreshControl } from 'react-native';
+import { Text, ActivityIndicator } from 'react-native-paper';
 import { AuthContext } from '../../context/AuthContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { getActiveDrives, getPlacedStudents } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
-// Mock Data
-const upcomingDrives = [
-    {
-        id: 1,
-        company: 'TechCorp Solutions',
-        role: 'Software Engineer',
-        package: '₹12 LPA',
-        type: 'On Campus',
-        date: 'Oct 28, 2023',
-        eligibility: 'CGPA > 7.5',
-        registered: 42,
-        icon: 'office-building',
-        color: 'gray'
-    },
-    {
-        id: 2,
-        company: 'BuildWell Constructions',
-        role: 'Civil Engineer',
-        package: '₹6.5 LPA',
-        type: 'Virtual',
-        date: 'Nov 02, 2023',
-        eligibility: 'Civil Dept.',
-        registered: 18,
-        icon: 'factory',
-        color: 'gray'
-    }
-];
-
-const placedStudents = [
-    {
-        id: 1,
-        name: 'Sarah Khan',
-        company: 'Google',
-        package: '₹24 LPA',
-        avatar: 'https://randomuser.me/api/portraits/women/68.jpg'
-    },
-    {
-        id: 2,
-        name: 'Rahul Mehta',
-        company: 'Amazon',
-        package: '₹18 LPA',
-        avatar: 'https://randomuser.me/api/portraits/men/32.jpg'
-    }
-];
-
 export default function PlacementDashboard({ navigation }) {
     const { logout } = useContext(AuthContext);
+    const [drives, setDrives] = useState([]);
+    const [placedStudents, setPlacedStudents] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const fetchData = async () => {
+        try {
+            const [drivesData, studentsData] = await Promise.all([
+                getActiveDrives(),
+                getPlacedStudents()
+            ]);
+            setDrives(drivesData);
+            setPlacedStudents(studentsData);
+        } catch (error) {
+            console.error("Error fetching placement data:", error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchData();
+    };
+
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#0055ff" />
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -72,13 +65,17 @@ export default function PlacementDashboard({ navigation }) {
                         <MaterialCommunityIcons name="bell-outline" size={24} color="#1f2937" />
                         <View style={styles.notificationDot} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.profileButton} onPress={logout}>
-                        <MaterialCommunityIcons name="account" size={24} color="#0055ff" />
+                    <TouchableOpacity style={styles.profileButton} onPress={() => navigation.navigate('Settings')}>
+                        <MaterialCommunityIcons name="cog" size={24} color="#0055ff" />
                     </TouchableOpacity>
                 </View>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
 
                 {/* Stats Grid */}
                 <View style={styles.statsGrid}>
@@ -92,7 +89,7 @@ export default function PlacementDashboard({ navigation }) {
                             </View>
                         </View>
                         <View>
-                            <Text style={styles.statValue}>12</Text>
+                            <Text style={styles.statValue}>{drives.length}</Text>
                             <Text style={styles.statLabel}>Active Drives</Text>
                         </View>
                     </View>
@@ -107,8 +104,8 @@ export default function PlacementDashboard({ navigation }) {
                             </View>
                         </View>
                         <View>
-                            <Text style={styles.statValue}>450</Text>
-                            <Text style={styles.statLabel}>Eligible Students</Text>
+                            <Text style={styles.statValue}>{placedStudents.length || 0}</Text>
+                            <Text style={styles.statLabel}>Placed Students</Text>
                         </View>
                     </View>
                 </View>
@@ -143,15 +140,15 @@ export default function PlacementDashboard({ navigation }) {
                     </View>
 
                     <View style={styles.drivesList}>
-                        {upcomingDrives.map((drive) => (
-                            <TouchableOpacity key={drive.id} style={styles.driveCard}>
+                        {drives.map((drive, index) => (
+                            <TouchableOpacity key={drive.id || index} style={styles.driveCard}>
                                 <View style={styles.driveHeader}>
                                     <View style={styles.companyInfo}>
                                         <View style={styles.companyIconBox}>
-                                            <MaterialCommunityIcons name={drive.icon} size={24} color="#4b5563" />
+                                            <MaterialCommunityIcons name={drive.icon || "office-building"} size={24} color="#4b5563" />
                                         </View>
                                         <View>
-                                            <Text style={styles.companyName}>{drive.company}</Text>
+                                            <Text style={styles.companyName}>{drive.companyName}</Text>
                                             <Text style={styles.roleInfo}>{drive.role} • {drive.package}</Text>
                                         </View>
                                     </View>
@@ -172,7 +169,7 @@ export default function PlacementDashboard({ navigation }) {
                                         <MaterialCommunityIcons name="school" size={18} color="#9ca3af" />
                                         <View>
                                             <Text style={styles.detailLabel}>ELIGIBILITY</Text>
-                                            <Text style={styles.detailValue}>{drive.eligibility}</Text>
+                                            <Text style={styles.detailValue}>{drive.eligibility || 'N/A'}</Text>
                                         </View>
                                     </View>
                                 </View>
@@ -184,7 +181,7 @@ export default function PlacementDashboard({ navigation }) {
                                                 <View key={i} style={[styles.pileAvatar, { marginLeft: i > 1 ? -8 : 0, zIndex: 4 - i, backgroundColor: '#e5e7eb' }]} />
                                             ))}
                                             <View style={[styles.pileCounter, { marginLeft: -8, zIndex: 0 }]}>
-                                                <Text style={styles.counterText}>+{drive.registered}</Text>
+                                                <Text style={styles.counterText}>+{drive.registered || 0}</Text>
                                             </View>
                                         </View>
                                     </View>
@@ -195,6 +192,9 @@ export default function PlacementDashboard({ navigation }) {
                                 </View>
                             </TouchableOpacity>
                         ))}
+                        {drives.length === 0 && (
+                            <Text style={{ textAlign: 'center', color: '#9aa2b1' }}>No upcoming drives.</Text>
+                        )}
                     </View>
                 </View>
 
@@ -214,10 +214,10 @@ export default function PlacementDashboard({ navigation }) {
 
                         <View style={styles.placementsList}>
                             {placedStudents.map((student, index) => (
-                                <View key={student.id}>
+                                <View key={student.id || index}>
                                     <View style={styles.studentRow}>
                                         <View style={styles.studentInfo}>
-                                            <Image source={{ uri: student.avatar }} style={styles.studentAvatar} />
+                                            <Image source={{ uri: student.avatar || 'https://via.placeholder.com/40' }} style={styles.studentAvatar} />
                                             <View>
                                                 <Text style={styles.studentName}>{student.name}</Text>
                                                 <Text style={styles.placementInfo}>Placed at {student.company}</Text>
@@ -228,6 +228,9 @@ export default function PlacementDashboard({ navigation }) {
                                     {index < placedStudents.length - 1 && <View style={styles.divider} />}
                                 </View>
                             ))}
+                            {placedStudents.length === 0 && (
+                                <Text style={{ textAlign: 'center', color: '#9aa2b1', padding: 8 }}>No placements yet.</Text>
+                            )}
                         </View>
 
                         <TouchableOpacity style={styles.uploadButton} onPress={() => navigation.navigate('Results')}>

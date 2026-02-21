@@ -1,12 +1,54 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
-import { Text } from 'react-native-paper';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshControl } from 'react-native';
+import { Text, ActivityIndicator } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { getActiveDrives } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
 export default function PlacementsScreen({ navigation }) {
+    const [drives, setDrives] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+
+    // Derived state for Hero card (e.g., highest package or 'Dream' company)
+    const [heroDrive, setHeroDrive] = useState(null);
+
+    const fetchDrives = async () => {
+        try {
+            const data = await getActiveDrives();
+            setDrives(data);
+
+            // Just picking the first one as hero for now, or find one with isDream=true
+            if (data.length > 0) {
+                setHeroDrive(data[0]);
+            }
+        } catch (error) {
+            console.error("Error fetching drives:", error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchDrives();
+    }, []);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchDrives();
+    };
+
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#0055ff" />
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
             {/* Header */}
@@ -22,51 +64,57 @@ export default function PlacementsScreen({ navigation }) {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
 
                 {/* Hero Card - Dream Company */}
-                <LinearGradient
-                    colors={['#0055ff', '#0033cc']}
-                    style={styles.heroCard}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                >
-                    <View style={styles.heroDecoration} />
+                {heroDrive && (
+                    <LinearGradient
+                        colors={['#0055ff', '#0033cc']}
+                        style={styles.heroCard}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                    >
+                        <View style={styles.heroDecoration} />
 
-                    <View style={styles.heroTop}>
-                        <View style={styles.heroContent}>
-                            <View style={styles.dreamBadge}>
-                                <MaterialCommunityIcons name="star" size={12} color="#fde047" />
-                                <Text style={styles.dreamText}>DREAM COMPANY</Text>
+                        <View style={styles.heroTop}>
+                            <View style={styles.heroContent}>
+                                <View style={styles.dreamBadge}>
+                                    <MaterialCommunityIcons name="star" size={12} color="#fde047" />
+                                    <Text style={styles.dreamText}>FEATURED DRIVE</Text>
+                                </View>
+                                <Text style={styles.heroTitle}>{heroDrive.companyName}</Text>
+                                <Text style={styles.heroSubtitle}>{heroDrive.role} • {heroDrive.type}</Text>
                             </View>
-                            <Text style={styles.heroTitle}>TechFlow Systems</Text>
-                            <Text style={styles.heroSubtitle}>SDE-1 • Full Time</Text>
+
+                            <View style={styles.companyLogoLarge}>
+                                <MaterialCommunityIcons name="domain" size={32} color="#0055ff" />
+                            </View>
                         </View>
 
-                        <View style={styles.companyLogoLarge}>
-                            <MaterialCommunityIcons name="domain" size={32} color="#0055ff" />
+                        <View style={styles.heroGrid}>
+                            <View style={styles.heroGridItem}>
+                                <Text style={styles.gridLabel}>PACKAGE</Text>
+                                <Text style={styles.gridValue}>{heroDrive.package}</Text>
+                            </View>
+                            <View style={styles.heroGridItem}>
+                                <Text style={styles.gridLabel}>ELIGIBILITY</Text>
+                                <Text style={styles.gridValue}>{heroDrive.eligibility || 'N/A'}</Text>
+                            </View>
+                            <View style={styles.heroGridItem}>
+                                <Text style={styles.gridLabel}>DATE</Text>
+                                <Text style={styles.gridValue}>{heroDrive.date}</Text>
+                            </View>
                         </View>
-                    </View>
 
-                    <View style={styles.heroGrid}>
-                        <View style={styles.heroGridItem}>
-                            <Text style={styles.gridLabel}>PACKAGE</Text>
-                            <Text style={styles.gridValue}>₹18 LPA</Text>
-                        </View>
-                        <View style={styles.heroGridItem}>
-                            <Text style={styles.gridLabel}>CGPA</Text>
-                            <Text style={styles.gridValue}>7.5+</Text>
-                        </View>
-                        <View style={styles.heroGridItem}>
-                            <Text style={styles.gridLabel}>DEADLINE</Text>
-                            <Text style={styles.gridValue}>Nov 20</Text>
-                        </View>
-                    </View>
-
-                    <TouchableOpacity style={styles.applyButton}>
-                        <Text style={styles.applyButtonText}>Apply Now</Text>
-                    </TouchableOpacity>
-                </LinearGradient>
+                        <TouchableOpacity style={styles.applyButton}>
+                            <Text style={styles.applyButtonText}>Apply Now</Text>
+                        </TouchableOpacity>
+                    </LinearGradient>
+                )}
 
                 {/* Active Drives List */}
                 <View style={styles.sectionHeader}>
@@ -78,187 +126,53 @@ export default function PlacementsScreen({ navigation }) {
                 </View>
 
                 <View style={styles.drivesList}>
-
-                    {/* Drive 1 - Data Analyst */}
-                    <TouchableOpacity style={styles.driveCard}>
-                        <View style={styles.cardHeader}>
-                            <View style={[styles.iconBox, { backgroundColor: '#eef2ff', borderColor: '#e0e7ff', color: '#4f46e5' }]}>
-                                <MaterialCommunityIcons name="database" size={24} color="#4f46e5" />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <View>
-                                        <Text style={styles.roleName}>Data Analyst</Text>
-                                        <Text style={styles.companyName}>Analytix Corp</Text>
-                                    </View>
-                                    <View style={[styles.statusTag, { backgroundColor: '#f0fdf4', borderColor: '#dcfce7' }]}>
-                                        <Text style={[styles.statusText, { color: '#16a34a' }]}>NEW</Text>
-                                    </View>
+                    {drives.map((drive, index) => (
+                        <TouchableOpacity key={index} style={styles.driveCard}>
+                            {drive.isNew && (
+                                <View style={[styles.statusTag, { position: 'absolute', top: 12, right: 12, backgroundColor: '#f0fdf4', borderColor: '#dcfce7' }]}>
+                                    <Text style={[styles.statusText, { color: '#16a34a' }]}>NEW</Text>
+                                </View>
+                            )}
+                            <View style={styles.cardHeader}>
+                                <View style={[styles.iconBox, { backgroundColor: '#eef2ff', borderColor: '#e0e7ff', color: '#4f46e5' }]}>
+                                    <MaterialCommunityIcons name="briefcase-variant-outline" size={24} color="#4f46e5" />
+                                </View>
+                                <View style={{ flex: 1, marginRight: 24 }}>
+                                    <Text style={styles.roleName}>{drive.role}</Text>
+                                    <Text style={styles.companyName}>{drive.companyName}</Text>
                                 </View>
                             </View>
-                        </View>
 
-                        <View style={styles.tagsContainer}>
-                            <View style={styles.tag}>
-                                <Text style={styles.tagText}>₹8-10 LPA</Text>
-                            </View>
-                            <View style={styles.tag}>
-                                <Text style={styles.tagText}>CSE / IT</Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.cardFooter}>
-                            <View style={styles.metaContainer}>
-                                <MaterialCommunityIcons name="calendar-clock" size={14} color="#5e6d8d" />
-                                <Text style={styles.metaText}>Ends in 2 days</Text>
-                            </View>
-                            <TouchableOpacity style={styles.smallApplyButton}>
-                                <Text style={styles.smallApplyText}>Apply</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* Drive 2 - Civil Engineer */}
-                    <TouchableOpacity style={[styles.driveCard, { opacity: 0.9 }]}>
-                        <View style={styles.appliedCheck}>
-                            <MaterialCommunityIcons name="check" size={14} color="white" />
-                        </View>
-                        <View style={styles.cardHeader}>
-                            <View style={[styles.iconBox, { backgroundColor: '#fff7ed', borderColor: '#ffedd5', color: '#ea580c' }]}>
-                                <MaterialCommunityIcons name="domain" size={24} color="#ea580c" />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <View>
-                                        <Text style={styles.roleName}>Civil Engineer</Text>
-                                        <Text style={styles.companyName}>BuildRight Infra</Text>
-                                    </View>
+                            <View style={styles.tagsContainer}>
+                                <View style={styles.tag}>
+                                    <Text style={styles.tagText}>{drive.package}</Text>
+                                </View>
+                                <View style={styles.tag}>
+                                    <Text style={styles.tagText}>{drive.location}</Text>
                                 </View>
                             </View>
-                        </View>
 
-                        <View style={styles.tagsContainer}>
-                            <View style={styles.tag}>
-                                <Text style={styles.tagText}>₹6.5 LPA</Text>
-                            </View>
-                            <View style={styles.tag}>
-                                <Text style={styles.tagText}>Civil</Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.cardFooter}>
-                            <View style={styles.metaContainer}>
-                                <MaterialCommunityIcons name="calendar" size={14} color="#5e6d8d" />
-                                <Text style={styles.metaText}>Drive: Nov 25</Text>
-                            </View>
-                            <View style={styles.appliedBadge}>
-                                <Text style={styles.appliedText}>Applied</Text>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* Drive 3 - UI/UX Intern */}
-                    <TouchableOpacity style={styles.driveCard}>
-                        <View style={styles.cardHeader}>
-                            <View style={[styles.iconBox, { backgroundColor: '#faf5ff', borderColor: '#f3e8ff', color: '#9333ea' }]}>
-                                <MaterialCommunityIcons name="palette" size={24} color="#9333ea" />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <View>
-                                        <Text style={styles.roleName}>UI/UX Intern</Text>
-                                        <Text style={styles.companyName}>CreativeStudio</Text>
-                                    </View>
+                            <View style={styles.cardFooter}>
+                                <View style={styles.metaContainer}>
+                                    <MaterialCommunityIcons name="calendar-clock" size={14} color="#5e6d8d" />
+                                    <Text style={styles.metaText}>{drive.date}</Text>
                                 </View>
+                                <TouchableOpacity style={styles.smallApplyButton}>
+                                    <Text style={styles.smallApplyText}>Apply</Text>
+                                </TouchableOpacity>
                             </View>
-                        </View>
-
-                        <View style={styles.tagsContainer}>
-                            <View style={styles.tag}>
-                                <Text style={styles.tagText}>₹25k/mo</Text>
-                            </View>
-                            <View style={styles.tag}>
-                                <Text style={styles.tagText}>All Depts</Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.cardFooter}>
-                            <View style={styles.metaContainer}>
-                                <MaterialCommunityIcons name="folder-open" size={14} color="#5e6d8d" />
-                                <Text style={styles.metaText}>Portfolio Req.</Text>
-                            </View>
-                            <TouchableOpacity style={styles.detailsButton}>
-                                <Text style={styles.detailsText}>Details</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* Drive 4 - Backend Dev */}
-                    <TouchableOpacity style={styles.driveCard}>
-                        <View style={styles.cardHeader}>
-                            <View style={[styles.iconBox, { backgroundColor: '#eff6ff', borderColor: '#dbeafe', color: '#0055ff' }]}>
-                                <MaterialCommunityIcons name="server" size={24} color="#0055ff" />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <View>
-                                        <Text style={styles.roleName}>Backend Dev</Text>
-                                        <Text style={styles.companyName}>ServerLogic Inc.</Text>
-                                    </View>
-                                </View>
-                            </View>
-                        </View>
-
-                        <View style={styles.tagsContainer}>
-                            <View style={styles.tag}>
-                                <Text style={styles.tagText}>₹12 LPA</Text>
-                            </View>
-                            <View style={styles.tag}>
-                                <Text style={styles.tagText}>CSE / ECE</Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.cardFooter}>
-                            <View style={styles.metaContainer}>
-                                <MaterialCommunityIcons name="code-tags" size={14} color="#5e6d8d" />
-                                <Text style={styles.metaText}>Java/Spring</Text>
-                            </View>
-                            <TouchableOpacity style={styles.smallApplyButton}>
-                                <Text style={styles.smallApplyText}>Apply</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </TouchableOpacity>
-
+                        </TouchableOpacity>
+                    ))}
+                    {drives.length === 0 && (
+                        <Text style={{ textAlign: 'center', color: '#9aa2b1', marginTop: 20 }}>No active drives at the moment.</Text>
+                    )}
                 </View>
 
                 {/* Spacer for bottom bar */}
-                <View style={{ height: 80 }} />
+                <View style={{ height: 20 }} />
             </ScrollView>
 
-            {/* Bottom Tab Bar (Custom) */}
-            <View style={styles.bottomBar}>
-                <View style={styles.tabItemsContainer}>
-                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Dashboard')}>
-                        <MaterialCommunityIcons name="view-dashboard-outline" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Home</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Events')}>
-                        <MaterialCommunityIcons name="calendar-month-outline" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Events</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem}>
-                        <MaterialCommunityIcons name="briefcase" size={26} color="#0055ff" />
-                        <Text style={[styles.tabLabel, { color: '#0055ff', fontWeight: 'bold' }]}>Jobs</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem}>
-                        <MaterialCommunityIcons name="account-outline" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Profile</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
+            {/* Bottom Tab Bar Removed - Handled by Navigator */}
         </View>
     );
 }
@@ -326,10 +240,5 @@ const styles = StyleSheet.create({
 
     appliedCheck: { position: 'absolute', top: -4, right: -4, width: 20, height: 20, borderRadius: 10, backgroundColor: '#22c55e', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'white', zIndex: 1, elevation: 2 },
     appliedBadge: { backgroundColor: '#f0fdf4', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#dcfce7' },
-    appliedText: { color: '#16a34a', fontSize: 12, fontWeight: 'bold' },
-
-    bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(255,255,255,0.9)', borderTopWidth: 1, borderTopColor: '#f3f4f6', height: 80, paddingBottom: 20 },
-    tabItemsContainer: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', height: '100%' },
-    tabItem: { alignItems: 'center', gap: 4, padding: 8, width: 64 },
-    tabLabel: { fontSize: 10, color: '#9aa2b1', fontWeight: '500' }
+    appliedText: { color: '#16a34a', fontSize: 12, fontWeight: 'bold' }
 });

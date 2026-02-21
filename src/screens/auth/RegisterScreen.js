@@ -103,7 +103,7 @@ export default function RegisterScreen({ navigation }) {
                             >
                                 <View style={styles.heroTitleContainer}>
                                     <MaterialCommunityIcons name="school" size={28} color="white" />
-                                    <Text style={styles.heroTitle}>Campus Connect</Text>
+                                    <Text style={styles.heroTitle}>Study Vault</Text>
                                 </View>
                             </LinearGradient>
                         </ImageBackground>

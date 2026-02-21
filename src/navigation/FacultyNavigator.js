@@ -5,6 +5,7 @@ import FacultyDashboard from '../screens/faculty/Dashboard';
 import AttendanceManager from '../screens/faculty/AttendanceManager';
 import MarksUpload from '../screens/faculty/MarksUpload';
 import NotesUpload from '../screens/faculty/NotesUpload';
+import SettingsScreen from '../screens/common/SettingsScreen';
 
 // Placeholders for other faculty screens
 const PlaceholderScreen = ({ route }) => (
@@ -12,6 +13,8 @@ const PlaceholderScreen = ({ route }) => (
         <Text>{route.name} Screen</Text>
     </View>
 );
+
+import StudentProfile from '../screens/student/StudentProfile';
 
 const Stack = createStackNavigator();
 
@@ -22,6 +25,8 @@ export default function FacultyNavigator() {
             <Stack.Screen name="AttendanceManager" component={AttendanceManager} />
             <Stack.Screen name="MarksUpload" component={MarksUpload} />
             <Stack.Screen name="NotesUpload" component={NotesUpload} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="Profile" component={StudentProfile} />
         </Stack.Navigator>
     );
 }

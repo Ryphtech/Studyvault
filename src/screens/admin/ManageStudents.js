@@ -5,31 +5,53 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
-// Mock Data
-const initialStudents = [
-    { id: 1, name: 'Alex Johnson', roll: '2023-CS-042', branch: 'CS', year: 'Year 2', avatar: 'https://randomuser.me/api/portraits/men/1.jpg', color: 'blue' },
-    { id: 2, name: 'Maria Garcia', roll: '2023-EE-108', branch: 'EE', year: 'Year 3', avatar: 'https://randomuser.me/api/portraits/women/2.jpg', color: 'orange' },
-    { id: 3, name: 'James Chen', roll: '2022-ME-055', branch: 'ME', year: 'Year 4', avatar: 'https://randomuser.me/api/portraits/men/3.jpg', color: 'purple', status: 'red' },
-    { id: 4, name: 'Priya Patel', roll: '2023-CS-089', branch: 'CS', year: 'Year 2', avatar: 'https://randomuser.me/api/portraits/women/4.jpg', color: 'blue' },
-    { id: 5, name: 'Michael Ross', roll: '2023-CE-012', branch: 'CE', year: 'Year 1', avatar: 'https://randomuser.me/api/portraits/men/5.jpg', color: 'green' },
-    { id: 6, name: 'Sarah Connor', roll: '2021-EE-099', branch: 'EE', year: 'Year 4', avatar: 'https://randomuser.me/api/portraits/women/6.jpg', color: 'orange' },
-];
+const filters = ['All', 'Computer Science', 'Electrical', 'Mechanical', 'Civil', 'General'];
 
-const filters = ['All', 'Computer Science', 'Electrical', 'Mechanical', 'Civil'];
+import { subscribeToUsersByRole } from '../../services/firestoreService';
+import { ActivityIndicator } from 'react-native-paper';
 
 export default function ManageStudents({ navigation }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedFilter, setSelectedFilter] = useState('All');
+    const [students, setStudents] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    const getBadgeStyle = (color) => {
-        switch (color) {
-            case 'blue': return { bg: '#eff6ff', text: '#1d4ed8' };
-            case 'orange': return { bg: '#fff7ed', text: '#c2410c' };
-            case 'purple': return { bg: '#faf5ff', text: '#7e22ce' };
-            case 'green': return { bg: '#f0fdf4', text: '#15803d' };
-            default: return { bg: '#f3f4f6', text: '#374151' };
-        }
+    React.useEffect(() => {
+        const unsubscribe = subscribeToUsersByRole('student', (data) => {
+            setStudents(data);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    const getBadgeStyle = (department) => {
+        const dept = department?.toLowerCase() || '';
+        if (dept.includes('computer') || dept.includes('cs')) return { bg: '#eff6ff', text: '#1d4ed8' };
+        if (dept.includes('electric') || dept.includes('ee')) return { bg: '#fff7ed', text: '#c2410c' };
+        if (dept.includes('mechanic') || dept.includes('me')) return { bg: '#faf5ff', text: '#7e22ce' };
+        if (dept.includes('civil') || dept.includes('ce')) return { bg: '#f0fdf4', text: '#15803d' };
+        return { bg: '#f3f4f6', text: '#374151' };
     };
+
+    const filteredStudents = students.filter(student => {
+        const matchesSearch = student.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            student.email?.toLowerCase().includes(searchQuery.toLowerCase());
+
+        if (selectedFilter === 'All') return matchesSearch;
+
+        const dept = student.department?.toLowerCase() || '';
+        const filter = selectedFilter.toLowerCase();
+
+        // Simple mapping for demo filters
+        const matchesFilter = (filter.includes('computer') && (dept.includes('computer') || dept.includes('cs'))) ||
+            (filter.includes('electrical') && (dept.includes('electric') || dept.includes('ee'))) ||
+            (filter.includes('mechanical') && (dept.includes('mechanic') || dept.includes('me'))) ||
+            (filter.includes('civil') && (dept.includes('civil') || dept.includes('ce'))) ||
+            (dept.includes(filter));
+
+        return matchesSearch && matchesFilter;
+    });
 
     return (
         <View style={styles.container}>
@@ -74,38 +96,58 @@ export default function ManageStudents({ navigation }) {
 
             {/* List Header */}
             <View style={styles.listHeader}>
-                <Text style={styles.listTitle}>STUDENTS LIST (142)</Text>
+                <Text style={styles.listTitle}>STUDENTS LIST ({filteredStudents.length})</Text>
                 <TouchableOpacity>
-                    <Text style={styles.sortText}>Sort by ID</Text>
+                    <Text style={styles.sortText}>Sort by Name</Text>
                 </TouchableOpacity>
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                <View style={styles.studentList}>
-                    {initialStudents.map((student) => {
-                        const badgeStyle = getBadgeStyle(student.color);
-                        return (
-                            <TouchableOpacity key={student.id} style={styles.studentCard}>
-                                <View style={styles.cardLeft}>
-                                    <View style={styles.avatarBox}>
-                                        <Image source={{ uri: student.avatar }} style={styles.avatar} />
-                                        {student.status && <View style={[styles.statusDot, { backgroundColor: student.status === 'red' ? '#ef4444' : '#22c55e' }]} />}
-                                    </View>
-                                    <View>
-                                        <Text style={styles.studentName}>{student.name}</Text>
-                                        <Text style={styles.studentId}>ID: {student.roll}</Text>
-                                        <View style={[styles.badge, { backgroundColor: badgeStyle.bg }]}>
-                                            <Text style={[styles.badgeText, { color: badgeStyle.text }]}>{student.branch} - {student.year}</Text>
+                {loading ? (
+                    <ActivityIndicator size="large" color="#0055ff" style={{ marginTop: 40 }} />
+                ) : (
+                    <View style={styles.studentList}>
+                        {filteredStudents.map((student) => {
+                            const badgeStyle = getBadgeStyle(student.department);
+                            return (
+                                <TouchableOpacity key={student.uid} style={styles.studentCard} onPress={() => {/* Could navigate to profile detail */ }}>
+                                    <View style={styles.cardLeft}>
+                                        <View style={styles.avatarBox}>
+                                            {student.profileImage ? (
+                                                <Image source={{ uri: student.profileImage }} style={styles.avatar} />
+                                            ) : (
+                                                <View style={[styles.avatar, { backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }]}>
+                                                    <Text style={{ fontSize: 20, color: '#64748b', fontWeight: 'bold' }}>
+                                                        {student.name ? student.name.charAt(0).toUpperCase() : '?'}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                            {/* Offline dot as fallback if no real presence system yet */}
+                                            <View style={[styles.statusDot, { backgroundColor: '#94a3b8' }]} />
+                                        </View>
+                                        <View>
+                                            <Text style={styles.studentName}>{student.name || 'Unnamed Student'}</Text>
+                                            <Text style={styles.studentId}>{student.email || 'No email'}</Text>
+                                            <View style={[styles.badge, { backgroundColor: badgeStyle.bg }]}>
+                                                <Text style={[styles.badgeText, { color: badgeStyle.text }]}>
+                                                    {student.department || 'General'} {student.semester ? `- Sem ${student.semester}` : ''}
+                                                </Text>
+                                            </View>
                                         </View>
                                     </View>
-                                </View>
-                                <TouchableOpacity style={styles.moreButton}>
-                                    <MaterialCommunityIcons name="dots-vertical" size={24} color="#9ca3af" />
+                                    <TouchableOpacity style={styles.moreButton}>
+                                        <MaterialCommunityIcons name="dots-vertical" size={24} color="#9ca3af" />
+                                    </TouchableOpacity>
                                 </TouchableOpacity>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
+                            );
+                        })}
+                        {filteredStudents.length === 0 && !loading && (
+                            <View style={{ padding: 20, alignItems: 'center' }}>
+                                <Text style={{ color: '#9ca3af' }}>No students found.</Text>
+                            </View>
+                        )}
+                    </View>
+                )}
 
                 {/* Load More Indicator */}
                 <View style={styles.loadMoreIndicator} />
@@ -117,7 +159,7 @@ export default function ManageStudents({ navigation }) {
             <View style={styles.bottomBar}>
                 <View style={styles.tabItemsContainer}>
                     <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Dashboard')}>
-                        <MaterialCommunityIcons name="home-outline" size={26} color="#9aa2b1" />
+                        <MaterialCommunityIcons name="view-dashboard-outline" size={26} color="#9aa2b1" />
                         <Text style={styles.tabLabel}>Home</Text>
                     </TouchableOpacity>
 
@@ -126,14 +168,14 @@ export default function ManageStudents({ navigation }) {
                         <Text style={[styles.tabLabel, { color: '#0055ff', fontWeight: 'bold' }]}>Students</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('ManageFaculty') || console.warn('Not Implemented')}>
-                        <MaterialCommunityIcons name="school-outline" size={26} color="#9aa2b1" />
+                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('ManageFaculty')}>
+                        <MaterialCommunityIcons name="account-tie-outline" size={26} color="#9aa2b1" />
                         <Text style={styles.tabLabel}>Faculty</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.tabItem}>
-                        <MaterialCommunityIcons name="account-outline" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Profile</Text>
+                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Settings')}>
+                        <MaterialCommunityIcons name="cog-outline" size={26} color="#9aa2b1" />
+                        <Text style={styles.tabLabel}>Settings</Text>
                     </TouchableOpacity>
                 </View>
             </View>

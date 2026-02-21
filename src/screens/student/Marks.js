@@ -1,9 +1,11 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
-import { Text } from 'react-native-paper';
+import React, { useContext, useEffect, useState } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshControl } from 'react-native';
+import { Text, ActivityIndicator } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
+import { AuthContext } from '../../context/AuthContext';
+import { getStudentMarks } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
@@ -43,6 +45,67 @@ const CircularProgress = ({ size, strokeWidth, progress, color, backgroundColor 
 };
 
 export default function MarksScreen({ navigation }) {
+    const { user } = useContext(AuthContext);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [marksData, setMarksData] = useState([]);
+    const [stats, setStats] = useState({ percentage: 0, passed: 0, arrears: 0, totalSubjects: 0 });
+
+    const fetchMarks = async () => {
+        try {
+            const studentId = user?.uid || 'student_demo';
+            const records = await getStudentMarks(studentId);
+            setMarksData(records);
+
+            // Calculate stats
+            let totalMarks = 0;
+            let maxTotal = 0;
+            let passed = 0;
+            let arrears = 0;
+
+            records.forEach(subject => {
+                totalMarks += subject.total;
+                maxTotal += subject.maxScore;
+                if (subject.total >= (subject.maxScore * 0.40)) { // Assuming 40% pass
+                    passed++;
+                } else {
+                    arrears++;
+                }
+            });
+
+            const percentage = maxTotal > 0 ? Math.round((totalMarks / maxTotal) * 100) : 0;
+            setStats({
+                percentage,
+                passed,
+                arrears,
+                totalSubjects: records.length
+            });
+
+        } catch (error) {
+            console.error("Error fetching marks:", error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchMarks();
+    }, []);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchMarks();
+    };
+
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#0055ff" />
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
             {/* Header */}
@@ -58,7 +121,11 @@ export default function MarksScreen({ navigation }) {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
 
                 {/* Hero Card */}
                 <LinearGradient
@@ -72,16 +139,18 @@ export default function MarksScreen({ navigation }) {
                     <View style={styles.heroContentRow}>
                         <View style={styles.heroStats}>
                             <Text style={styles.heroLabel}>Semester Average</Text>
-                            <Text style={styles.heroValue}>84%</Text>
+                            <Text style={styles.heroValue}>{stats.percentage}%</Text>
                             <View style={styles.statusBadge}>
                                 <MaterialCommunityIcons name="star" size={14} color="#fde047" />
-                                <Text style={styles.statusText}>First Class</Text>
+                                <Text style={styles.statusText}>
+                                    {stats.percentage >= 75 ? "First Class" : (stats.percentage >= 60 ? "Second Class" : "Needs Improvement")}
+                                </Text>
                             </View>
                         </View>
                         <CircularProgress
                             size={100}
                             strokeWidth={8}
-                            progress={0.84}
+                            progress={stats.percentage / 100}
                             color="white"
                             backgroundColor="rgba(255,255,255,0.2)"
                         />
@@ -90,15 +159,15 @@ export default function MarksScreen({ navigation }) {
                     <View style={styles.heroGrid}>
                         <View style={styles.heroGridItem}>
                             <Text style={styles.gridLabel}>SUBJECTS</Text>
-                            <Text style={styles.gridValue}>6</Text>
+                            <Text style={styles.gridValue}>{stats.totalSubjects}</Text>
                         </View>
                         <View style={styles.heroGridItem}>
                             <Text style={styles.gridLabel}>PASSED</Text>
-                            <Text style={styles.gridValue}>5</Text>
+                            <Text style={styles.gridValue}>{stats.passed}</Text>
                         </View>
                         <View style={styles.heroGridItem}>
                             <Text style={styles.gridLabel}>ARREARS</Text>
-                            <Text style={styles.gridValue}>1</Text>
+                            <Text style={styles.gridValue}>{stats.arrears}</Text>
                         </View>
                     </View>
                 </LinearGradient>
@@ -112,180 +181,60 @@ export default function MarksScreen({ navigation }) {
                 </View>
 
                 <View style={styles.subjectList}>
-                    {/* Subject 1 - Software Engineering */}
-                    <TouchableOpacity style={styles.subjectCard}>
-                        <View style={styles.subjectHeader}>
-                            <View style={styles.subjectInfo}>
-                                <View style={[styles.iconBox, { backgroundColor: '#f0fdf4' }]}>
-                                    <MaterialCommunityIcons name="code-tags" size={24} color="#16a34a" />
-                                </View>
-                                <View>
-                                    <Text style={styles.subjectName}>Software Engineering</Text>
-                                    <Text style={styles.subjectDetails}>CS-302 • 4 Credits</Text>
-                                </View>
-                            </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                                <Text style={[styles.percentageText, { color: '#16a34a' }]}>46<Text style={styles.totalText}>/50</Text></Text>
-                            </View>
-                        </View>
-                        <View style={styles.progressBarBg}>
-                            <View style={[styles.progressBarFill, { width: '92%', backgroundColor: '#22c55e' }]} />
-                        </View>
-                        <View style={styles.breakdownGrid}>
-                            <View style={styles.breakdownItem}>
-                                <Text style={styles.breakdownLabel}>CIA 1</Text>
-                                <Text style={styles.breakdownValue}>19/20</Text>
-                            </View>
-                            <View style={styles.breakdownItem}>
-                                <Text style={styles.breakdownLabel}>CIA 2</Text>
-                                <Text style={styles.breakdownValue}>18/20</Text>
-                            </View>
-                            <View style={styles.breakdownItem}>
-                                <Text style={styles.breakdownLabel}>Assign</Text>
-                                <Text style={styles.breakdownValue}>09/10</Text>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
+                    {marksData.map((subject, index) => {
+                        const scorePercent = (subject.total / subject.maxScore) * 100;
+                        const isFail = scorePercent < 40;
+                        const cardStyle = isFail ? styles.dangerCard : (scorePercent < 60 ? styles.warningCard : styles.subjectCard);
+                        const color = isFail ? '#ef4444' : (scorePercent < 60 ? '#ca8a04' : '#22c55e');
+                        const bgColor = isFail ? '#fef2f2' : (scorePercent < 60 ? '#fefce8' : '#f0fdf4');
+                        const icon = isFail ? 'alert' : (scorePercent < 60 ? 'hub-outline' : 'code-tags');
 
-                    {/* Subject 2 - Computer Networks */}
-                    <TouchableOpacity style={[styles.subjectCard, styles.warningCard]}>
-                        <View style={styles.subjectHeader}>
-                            <View style={styles.subjectInfo}>
-                                <View style={[styles.iconBox, { backgroundColor: '#fefce8' }]}>
-                                    <MaterialCommunityIcons name="hub-outline" size={24} color="#ca8a04" />
+                        return (
+                            <TouchableOpacity key={index} style={[styles.subjectCard, cardStyle]}>
+                                <View style={styles.subjectHeader}>
+                                    <View style={styles.subjectInfo}>
+                                        <View style={[styles.iconBox, { backgroundColor: bgColor }]}>
+                                            <MaterialCommunityIcons name={icon} size={24} color={color} />
+                                        </View>
+                                        <View>
+                                            <Text style={styles.subjectName}>{subject.subjectName}</Text>
+                                            <Text style={styles.subjectDetails}>{subject.subjectId} • {subject.credits} Credits</Text>
+                                        </View>
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={[styles.percentageText, { color }]}>{subject.total}<Text style={styles.totalText}>/{subject.maxScore}</Text></Text>
+                                    </View>
                                 </View>
-                                <View>
-                                    <Text style={styles.subjectName}>Computer Networks</Text>
-                                    <Text style={styles.subjectDetails}>CS-304 • 3 Credits</Text>
+                                <View style={styles.progressBarBg}>
+                                    <View style={[styles.progressBarFill, { width: `${scorePercent}%`, backgroundColor: color }]} />
                                 </View>
-                            </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                                <Text style={[styles.percentageText, { color: '#ca8a04' }]}>35<Text style={styles.totalText}>/50</Text></Text>
-                            </View>
-                        </View>
-                        <View style={styles.progressBarBg}>
-                            <View style={[styles.progressBarFill, { width: '70%', backgroundColor: '#facc15' }]} />
-                        </View>
-                        <View style={styles.breakdownGrid}>
-                            <View style={styles.breakdownItem}>
-                                <Text style={styles.breakdownLabel}>CIA 1</Text>
-                                <Text style={styles.breakdownValue}>14/20</Text>
-                            </View>
-                            <View style={styles.breakdownItem}>
-                                <Text style={styles.breakdownLabel}>CIA 2</Text>
-                                <Text style={styles.breakdownValue}>13/20</Text>
-                            </View>
-                            <View style={styles.breakdownItem}>
-                                <Text style={styles.breakdownLabel}>Assign</Text>
-                                <Text style={styles.breakdownValue}>08/10</Text>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* Subject 3 - Data Analytics */}
-                    <TouchableOpacity style={styles.subjectCard}>
-                        <View style={styles.subjectHeader}>
-                            <View style={styles.subjectInfo}>
-                                <View style={[styles.iconBox, { backgroundColor: '#eff6ff' }]}>
-                                    <MaterialCommunityIcons name="chart-bar" size={24} color="#0055ff" />
+                                <View style={styles.breakdownGrid}>
+                                    <View style={styles.breakdownItem}>
+                                        <Text style={styles.breakdownLabel}>CIA 1</Text>
+                                        <Text style={styles.breakdownValue}>{subject.cia1}</Text>
+                                    </View>
+                                    <View style={styles.breakdownItem}>
+                                        <Text style={styles.breakdownLabel}>CIA 2</Text>
+                                        <Text style={styles.breakdownValue}>{subject.cia2}</Text>
+                                    </View>
+                                    <View style={styles.breakdownItem}>
+                                        <Text style={styles.breakdownLabel}>Assign</Text>
+                                        <Text style={styles.breakdownValue}>{subject.assignment}</Text>
+                                    </View>
                                 </View>
-                                <View>
-                                    <Text style={styles.subjectName}>Data Analytics</Text>
-                                    <Text style={styles.subjectDetails}>DA-201 • 3 Credits</Text>
-                                </View>
-                            </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                                <Text style={[styles.percentageText, { color: '#0055ff' }]}>42<Text style={styles.totalText}>/50</Text></Text>
-                            </View>
-                        </View>
-                        <View style={styles.progressBarBg}>
-                            <View style={[styles.progressBarFill, { width: '84%', backgroundColor: '#0055ff' }]} />
-                        </View>
-                        <View style={styles.breakdownGrid}>
-                            <View style={styles.breakdownItem}>
-                                <Text style={styles.breakdownLabel}>CIA 1</Text>
-                                <Text style={styles.breakdownValue}>18/20</Text>
-                            </View>
-                            <View style={styles.breakdownItem}>
-                                <Text style={styles.breakdownLabel}>CIA 2</Text>
-                                <Text style={styles.breakdownValue}>16/20</Text>
-                            </View>
-                            <View style={styles.breakdownItem}>
-                                <Text style={styles.breakdownLabel}>Assign</Text>
-                                <Text style={styles.breakdownValue}>08/10</Text>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* Subject 4 - Applied Mathematics */}
-                    <TouchableOpacity style={[styles.subjectCard, styles.dangerCard]}>
-                        <View style={styles.shortageBadge}>
-                            <MaterialCommunityIcons name="alert" size={12} color="#dc2626" />
-                            <Text style={styles.shortageText}>Re-Test</Text>
-                        </View>
-                        <View style={[styles.subjectHeader, { marginTop: 4 }]}>
-                            <View style={styles.subjectInfo}>
-                                <View style={[styles.iconBox, { backgroundColor: '#fef2f2' }]}>
-                                    <MaterialCommunityIcons name="function-variant" size={24} color="#ef4444" />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.subjectName}>Applied Mathematics</Text>
-                                    <Text style={styles.subjectDetails}>MA-401 • 4 Credits</Text>
-                                </View>
-                            </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                                <Text style={[styles.percentageText, { color: '#ef4444' }]}>19<Text style={styles.totalText}>/50</Text></Text>
-                            </View>
-                        </View>
-                        <View style={styles.progressBarBg}>
-                            <View style={[styles.progressBarFill, { width: '38%', backgroundColor: '#ef4444' }]} />
-                        </View>
-                        <View style={[styles.breakdownGrid, { borderColor: '#fecaca', backgroundColor: '#fef2f2' }]}>
-                            <View style={[styles.breakdownItem, { borderColor: '#fecaca', backgroundColor: 'transparent' }]}>
-                                <Text style={[styles.breakdownLabel, { color: '#f87171' }]}>CIA 1</Text>
-                                <Text style={[styles.breakdownValue, { color: '#dc2626' }]}>08/20</Text>
-                            </View>
-                            <View style={[styles.breakdownItem, { borderColor: '#fecaca', backgroundColor: 'transparent' }]}>
-                                <Text style={[styles.breakdownLabel, { color: '#f87171' }]}>CIA 2</Text>
-                                <Text style={[styles.breakdownValue, { color: '#dc2626' }]}>07/20</Text>
-                            </View>
-                            <View style={[styles.breakdownItem, { borderColor: '#fecaca', backgroundColor: 'transparent' }]}>
-                                <Text style={[styles.breakdownLabel, { color: '#f87171' }]}>Assign</Text>
-                                <Text style={[styles.breakdownValue, { color: '#dc2626' }]}>04/10</Text>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
-
+                            </TouchableOpacity>
+                        );
+                    })}
+                    {marksData.length === 0 && (
+                        <Text style={{ textAlign: 'center', color: '#9aa2b1', marginTop: 20 }}>No marks published yet.</Text>
+                    )}
                 </View>
 
                 {/* Spacer for bottom bar */}
-                <View style={{ height: 80 }} />
+                <View style={{ height: 20 }} />
             </ScrollView>
 
-            {/* Bottom Tab Bar (Custom) */}
-            <View style={styles.bottomBar}>
-                <View style={styles.tabItemsContainer}>
-                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Dashboard')}>
-                        <MaterialCommunityIcons name="view-dashboard-outline" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Home</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem}>
-                        <MaterialCommunityIcons name="book-open-page-variant" size={26} color="#0055ff" />
-                        <Text style={[styles.tabLabel, { color: '#0055ff', fontWeight: 'bold' }]}>Record</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Placements')}>
-                        <MaterialCommunityIcons name="briefcase-outline" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Jobs</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem}>
-                        <MaterialCommunityIcons name="account-outline" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Profile</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
+            {/* Bottom Tab Bar Removed - Handled by Navigator */}
         </View>
     );
 }
@@ -342,10 +291,5 @@ const styles = StyleSheet.create({
     breakdownValue: { fontSize: 12, fontWeight: 'bold', color: '#101318' },
 
     shortageBadge: { position: 'absolute', top: 0, right: 0, backgroundColor: '#fef2f2', paddingHorizontal: 8, paddingVertical: 4, borderBottomLeftRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 4 },
-    shortageText: { color: '#dc2626', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' },
-
-    bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(255,255,255,0.9)', borderTopWidth: 1, borderTopColor: '#f3f4f6', height: 80, paddingBottom: 20 },
-    tabItemsContainer: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', height: '100%' },
-    tabItem: { alignItems: 'center', gap: 4, padding: 8, width: 64 },
-    tabLabel: { fontSize: 10, color: '#9aa2b1', fontWeight: '500' }
+    shortageText: { color: '#dc2626', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' }
 });

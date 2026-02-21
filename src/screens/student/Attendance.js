@@ -1,9 +1,11 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
-import { Text, IconButton } from 'react-native-paper';
+import React, { useContext, useEffect, useState } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshControl } from 'react-native';
+import { Text, IconButton, ActivityIndicator } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
+import { AuthContext } from '../../context/AuthContext';
+import { getStudentAttendance, getStudentDashboardStats } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
@@ -43,6 +45,59 @@ const CircularProgress = ({ size, strokeWidth, progress, color, backgroundColor 
 };
 
 export default function AttendanceScreen({ navigation }) {
+    const { user } = useContext(AuthContext);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [attendanceData, setAttendanceData] = useState([]);
+    const [overallStats, setOverallStats] = useState({ percentage: 0, total: 0, present: 0, absent: 0 });
+
+    const fetchAttendance = async () => {
+        try {
+            const studentId = user?.uid || 'student_demo';
+            const records = await getStudentAttendance(studentId);
+            setAttendanceData(records);
+
+            // Calculate aggregated stats
+            let total = 0;
+            let attended = 0;
+            records.forEach(rec => {
+                total += rec.totalClasses || 0;
+                attended += rec.attendedClasses || 0;
+            });
+
+            const percentage = total > 0 ? Math.round((attended / total) * 100) : 0;
+            setOverallStats({
+                percentage,
+                total,
+                present: attended,
+                absent: total - attended
+            });
+
+        } catch (error) {
+            console.error("Error fetching attendance:", error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchAttendance();
+    }, []);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchAttendance();
+    };
+
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#0055ff" />
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
             {/* Header */}
@@ -58,7 +113,11 @@ export default function AttendanceScreen({ navigation }) {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
 
                 {/* Hero Card */}
                 <LinearGradient
@@ -72,16 +131,16 @@ export default function AttendanceScreen({ navigation }) {
                     <View style={styles.heroContentRow}>
                         <View style={styles.heroStats}>
                             <Text style={styles.heroLabel}>Overall Attendance</Text>
-                            <Text style={styles.heroValue}>78%</Text>
+                            <Text style={styles.heroValue}>{overallStats.percentage}%</Text>
                             <View style={styles.statusBadge}>
-                                <View style={styles.statusDot} />
-                                <Text style={styles.statusText}>Good Standing</Text>
+                                <View style={[styles.statusDot, { backgroundColor: overallStats.percentage >= 75 ? '#4ade80' : '#ef4444' }]} />
+                                <Text style={styles.statusText}>{overallStats.percentage >= 75 ? "Good Standing" : "Low Attendance"}</Text>
                             </View>
                         </View>
                         <CircularProgress
                             size={100}
                             strokeWidth={8}
-                            progress={0.78}
+                            progress={overallStats.percentage / 100}
                             color="white"
                             backgroundColor="rgba(255,255,255,0.2)"
                         />
@@ -90,15 +149,15 @@ export default function AttendanceScreen({ navigation }) {
                     <View style={styles.heroGrid}>
                         <View style={styles.heroGridItem}>
                             <Text style={styles.gridLabel}>TOTAL</Text>
-                            <Text style={styles.gridValue}>142</Text>
+                            <Text style={styles.gridValue}>{overallStats.total}</Text>
                         </View>
                         <View style={styles.heroGridItem}>
                             <Text style={styles.gridLabel}>PRESENT</Text>
-                            <Text style={styles.gridValue}>110</Text>
+                            <Text style={styles.gridValue}>{overallStats.present}</Text>
                         </View>
                         <View style={styles.heroGridItem}>
                             <Text style={styles.gridLabel}>ABSENT</Text>
-                            <Text style={styles.gridValue}>32</Text>
+                            <Text style={styles.gridValue}>{overallStats.absent}</Text>
                         </View>
                     </View>
                 </LinearGradient>
@@ -112,138 +171,60 @@ export default function AttendanceScreen({ navigation }) {
                 </View>
 
                 <View style={styles.subjectList}>
-                    {/* Subject 1 */}
-                    <TouchableOpacity style={styles.subjectCard}>
-                        <View style={styles.subjectHeader}>
-                            <View style={styles.subjectInfo}>
-                                <View style={[styles.iconBox, { backgroundColor: '#f0fdf4' }]}>
-                                    <MaterialCommunityIcons name="code-tags" size={24} color="#16a34a" />
-                                </View>
-                                <View>
-                                    <Text style={styles.subjectName}>Software Engineering</Text>
-                                    <Text style={styles.subjectDetails}>CS-302 • Prof. David</Text>
-                                </View>
-                            </View>
-                            <Text style={[styles.percentageText, { color: '#16a34a' }]}>92%</Text>
-                        </View>
-                        <View style={styles.progressBarBg}>
-                            <View style={[styles.progressBarFill, { width: '92%', backgroundColor: '#22c55e' }]} />
-                        </View>
-                        <View style={styles.subjectFooter}>
-                            <Text style={styles.footerText}>38/41 Classes Attended</Text>
-                            <View style={[styles.statusTag, { backgroundColor: '#f0fdf4' }]}>
-                                <Text style={[styles.statusTagText, { color: '#16a34a' }]}>ON TRACK</Text>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
+                    {attendanceData.map((subject, index) => {
+                        const subPercent = subject.totalClasses > 0
+                            ? Math.round((subject.attendedClasses / subject.totalClasses) * 100)
+                            : 0;
+                        const isLow = subPercent < 75;
+                        const isWarning = subPercent >= 75 && subPercent < 80; // Example range
 
-                    {/* Subject 2 */}
-                    <TouchableOpacity style={[styles.subjectCard, styles.warningCard]}>
-                        <View style={styles.subjectHeader}>
-                            <View style={styles.subjectInfo}>
-                                <View style={[styles.iconBox, { backgroundColor: '#fefce8' }]}>
-                                    <MaterialCommunityIcons name="hub-outline" size={24} color="#ca8a04" />
-                                </View>
-                                <View>
-                                    <Text style={styles.subjectName}>Computer Networks</Text>
-                                    <Text style={styles.subjectDetails}>CS-304 • Prof. Sarah</Text>
-                                </View>
-                            </View>
-                            <Text style={[styles.percentageText, { color: '#ca8a04' }]}>72%</Text>
-                        </View>
-                        <View style={styles.progressBarBg}>
-                            <View style={[styles.progressBarFill, { width: '72%', backgroundColor: '#facc15' }]} />
-                        </View>
-                        <View style={styles.subjectFooter}>
-                            <Text style={styles.footerText}>26/36 Classes Attended</Text>
-                            <View style={[styles.statusTag, { backgroundColor: '#fefce8', flexDirection: 'row', alignItems: 'center', gap: 2 }]}>
-                                <Text style={[styles.statusTagText, { color: '#ca8a04' }]}>WARNING</Text>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
+                        let statusColor = '#22c55e'; // Green
+                        if (isLow) statusColor = '#ef4444'; // Red
+                        else if (isWarning) statusColor = '#eab308'; // Yellow
 
-                    {/* Subject 3 */}
-                    <TouchableOpacity style={styles.subjectCard}>
-                        <View style={styles.subjectHeader}>
-                            <View style={styles.subjectInfo}>
-                                <View style={[styles.iconBox, { backgroundColor: '#eff6ff' }]}>
-                                    <MaterialCommunityIcons name="chart-bar" size={24} color="#0055ff" />
+                        return (
+                            <TouchableOpacity key={index} style={[styles.subjectCard, isLow && styles.dangerCard, isWarning && styles.warningCard]}>
+                                {isLow && (
+                                    <View style={styles.shortageBadge}>
+                                        <MaterialCommunityIcons name="alert" size={12} color="#dc2626" />
+                                        <Text style={styles.shortageText}>SHORTAGE</Text>
+                                    </View>
+                                )}
+                                <View style={[styles.subjectHeader, isLow && { marginTop: 4 }]}>
+                                    <View style={styles.subjectInfo}>
+                                        <View style={[styles.iconBox, { backgroundColor: isLow ? '#fef2f2' : '#f0fdf4' }]}>
+                                            <MaterialCommunityIcons name="book-open-variant" size={24} color={statusColor} />
+                                        </View>
+                                        <View>
+                                            <Text style={styles.subjectName}>{subject.subjectName}</Text>
+                                            <Text style={styles.subjectDetails}>{subject.subjectId}</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={[styles.percentageText, { color: statusColor }]}>{subPercent}%</Text>
                                 </View>
-                                <View>
-                                    <Text style={styles.subjectName}>Data Analytics</Text>
-                                    <Text style={styles.subjectDetails}>DA-201 • Dr. Alan</Text>
+                                <View style={styles.progressBarBg}>
+                                    <View style={[styles.progressBarFill, { width: `${subPercent}%`, backgroundColor: statusColor }]} />
                                 </View>
-                            </View>
-                            <Text style={[styles.percentageText, { color: '#0055ff' }]}>85%</Text>
-                        </View>
-                        <View style={styles.progressBarBg}>
-                            <View style={[styles.progressBarFill, { width: '85%', backgroundColor: '#0055ff' }]} />
-                        </View>
-                        <View style={styles.subjectFooter}>
-                            <Text style={styles.footerText}>30/35 Classes Attended</Text>
-                            <View style={[styles.statusTag, { backgroundColor: '#eff6ff' }]}>
-                                <Text style={[styles.statusTagText, { color: '#0055ff' }]}>SAFE</Text>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* Subject 4 */}
-                    <TouchableOpacity style={[styles.subjectCard, styles.dangerCard]}>
-                        <View style={styles.shortageBadge}>
-                            <MaterialCommunityIcons name="alert" size={12} color="#dc2626" />
-                            <Text style={styles.shortageText}>SHORTAGE</Text>
-                        </View>
-                        <View style={[styles.subjectHeader, { marginTop: 4 }]}>
-                            <View style={styles.subjectInfo}>
-                                <View style={[styles.iconBox, { backgroundColor: '#fef2f2' }]}>
-                                    <MaterialCommunityIcons name="function-variant" size={24} color="#ef4444" />
+                                <View style={styles.subjectFooter}>
+                                    <Text style={styles.footerText}>{subject.attendedClasses}/{subject.totalClasses} Classes Attended</Text>
+                                    <View style={[styles.statusTag, { backgroundColor: isLow ? '#fef2f2' : (isWarning ? '#fefce8' : '#f0fdf4') }]}>
+                                        <Text style={[styles.statusTagText, { color: statusColor }]}>{isLow ? "CRITICAL" : (isWarning ? "WARNING" : "ON TRACK")}</Text>
+                                    </View>
                                 </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.subjectName}>Applied Mathematics</Text>
-                                    <Text style={styles.subjectDetails}>MA-401 • Dr. James</Text>
-                                </View>
-                            </View>
-                            <Text style={[styles.percentageText, { color: '#ef4444' }]}>58%</Text>
-                        </View>
-                        <View style={styles.progressBarBg}>
-                            <View style={[styles.progressBarFill, { width: '58%', backgroundColor: '#ef4444' }]} />
-                        </View>
-                        <View style={styles.subjectFooter}>
-                            <Text style={styles.footerText}>17/29 Classes Attended</Text>
-                            <Text style={[styles.statusTagText, { color: '#ef4444', fontWeight: 'bold' }]}>Needs +6 classes</Text>
-                        </View>
-                    </TouchableOpacity>
+                            </TouchableOpacity>
+                        );
+                    })}
+                    {attendanceData.length === 0 && (
+                        <Text style={{ textAlign: 'center', color: '#9aa2b1', marginTop: 20 }}>No attendance records found.</Text>
+                    )}
 
                 </View>
 
                 {/* Spacer for bottom bar */}
-                <View style={{ height: 80 }} />
+                <View style={{ height: 20 }} />
             </ScrollView>
 
-            {/* Bottom Tab Bar (Custom) */}
-            <View style={styles.bottomBar}>
-                <View style={styles.tabItemsContainer}>
-                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Dashboard')}>
-                        <MaterialCommunityIcons name="view-dashboard-outline" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Home</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem}>
-                        <MaterialCommunityIcons name="book-open-page-variant" size={26} color="#0055ff" />
-                        <Text style={[styles.tabLabel, { color: '#0055ff', fontWeight: 'bold' }]}>Record</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Placements')}>
-                        <MaterialCommunityIcons name="briefcase-outline" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Jobs</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem}>
-                        <MaterialCommunityIcons name="account-outline" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Profile</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
+            {/* Bottom Tab Bar Removed - Handled by Navigator */}
         </View>
     );
 }

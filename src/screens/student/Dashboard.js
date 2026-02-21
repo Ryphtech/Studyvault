@@ -1,36 +1,92 @@
-import React, { useContext } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions } from 'react-native';
-import { Text, Avatar } from 'react-native-paper';
+import React, { useContext, useEffect, useState } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, RefreshControl } from 'react-native';
+import { Text, Avatar, ActivityIndicator } from 'react-native-paper';
 import { AuthContext } from '../../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { getStudentDashboardStats, getRecentJobs, getUpcomingEvents, subscribeToEvents } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
 export default function StudentDashboard({ navigation }) {
     const { logout, user } = useContext(AuthContext);
 
-    // Placeholder data
-    const studentName = "Alex"; // Or derive from user context if available
-    const department = "Comp. Sci • Sem 6";
+    // State
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({
+        attendance: 0,
+        cgpa: 0,
+        name: "Student",
+        department: "Loading..."
+    });
+    const [events, setEvents] = useState([]);
+    const [recentJobs, setRecentJobs] = useState([]);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const fetchData = async () => {
+        try {
+            // In a real app, use the actual user ID from AuthContext
+            // For seeding demo, we used 'student_demo'
+            const studentId = user?.uid || 'student_demo';
+
+            const statsData = await getStudentDashboardStats(studentId);
+            const jobsData = await getRecentJobs(1); // Just get 1 for the main card for now, or fetch list
+            const eventsData = await getUpcomingEvents(3);
+
+            setStats(statsData);
+            setRecentJobs(jobsData);
+            setEvents(eventsData);
+        } catch (error) {
+            console.error("Error fetching dashboard data:", error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+
+        // Optional: Subscribe to events real-time
+        // const unsubscribe = subscribeToEvents(setEvents);
+        // return () => unsubscribe();
+    }, []);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchData();
+    };
+
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#0055ff" />
+                <Text style={{ marginTop: 16, color: '#5e6d8d' }}>Loading your dashboard...</Text>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
             {/* Main Content ScrollView */}
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
 
                 {/* Top Bar */}
                 <View style={styles.topBar}>
                     <View style={styles.profileSection}>
                         <View style={styles.avatarContainer}>
                             <View style={styles.avatarCircle}>
-                                <Text style={styles.avatarText}>AM</Text>
+                                <Text style={styles.avatarText}>{stats.name.charAt(0)}</Text>
                             </View>
                             <View style={styles.onlineIndicator} />
                         </View>
                         <View style={styles.userInfo}>
-                            <Text style={styles.greeting}>Hi, {studentName}</Text>
-                            <Text style={styles.deptText}>{department}</Text>
+                            <Text style={styles.greeting}>Hi, {stats.name.split(' ')[0]}</Text>
+                            <Text style={styles.deptText}>{stats.department}</Text>
                         </View>
                     </View>
                     <TouchableOpacity style={styles.notificationButton}>
@@ -47,13 +103,19 @@ export default function StudentDashboard({ navigation }) {
                             <View style={[styles.statIconContainer, { backgroundColor: '#eff6ff' }]}>
                                 <MaterialCommunityIcons name="account-check-outline" size={20} color="#0055ff" />
                             </View>
-                            <View style={styles.trendBadge}>
-                                <MaterialCommunityIcons name="trending-up" size={14} color="#16a34a" />
-                                <Text style={styles.trendText}>Good</Text>
+                            <View style={[styles.trendBadge, { backgroundColor: stats.attendance >= 75 ? '#f0fdf4' : '#fef2f2' }]}>
+                                <MaterialCommunityIcons
+                                    name={stats.attendance >= 75 ? "trending-up" : "alert-circle-outline"}
+                                    size={14}
+                                    color={stats.attendance >= 75 ? "#16a34a" : "#dc2626"}
+                                />
+                                <Text style={[styles.trendText, { color: stats.attendance >= 75 ? "#16a34a" : "#dc2626" }]}>
+                                    {stats.attendance >= 75 ? "Good" : "Low"}
+                                </Text>
                             </View>
                         </View>
                         <View style={styles.statContent}>
-                            <Text style={styles.statValue}>85%</Text>
+                            <Text style={styles.statValue}>{stats.attendance}%</Text>
                             <Text style={styles.statLabel}>ATTENDANCE</Text>
                         </View>
                         <View style={[styles.statDecoration, { backgroundColor: 'rgba(0, 85, 255, 0.05)' }]} />
@@ -67,7 +129,7 @@ export default function StudentDashboard({ navigation }) {
                             </View>
                         </View>
                         <View style={styles.statContent}>
-                            <Text style={styles.statValue}>8.4</Text>
+                            <Text style={styles.statValue}>{stats.cgpa}</Text>
                             <Text style={styles.statLabel}>CGPA SCORE</Text>
                         </View>
                         <View style={[styles.statDecoration, { backgroundColor: 'rgba(147, 51, 234, 0.05)' }]} />
@@ -81,52 +143,58 @@ export default function StudentDashboard({ navigation }) {
                             <MaterialCommunityIcons name="briefcase-clock-outline" size={22} color="#0055ff" />
                             <Text style={styles.sectionTitle}>Placement Cell</Text>
                         </View>
-                        <TouchableOpacity onPress={() => navigation.navigate('Placements')}>
+                        <TouchableOpacity onPress={() => navigation.navigate('Jobs')}>
                             <Text style={styles.viewAllText}>View All</Text>
                         </TouchableOpacity>
                     </View>
 
-                    <TouchableOpacity
-                        style={styles.placementCardContainer}
-                        activeOpacity={0.9}
-                        onPress={() => navigation.navigate('Placements')}
-                    >
-                        <LinearGradient
-                            colors={['#0055ff', '#0044cc']}
-                            style={styles.placementGradient}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
+                    {recentJobs.length > 0 ? (
+                        <TouchableOpacity
+                            style={styles.placementCardContainer}
+                            activeOpacity={0.9}
+                            onPress={() => navigation.navigate('Jobs')}
                         >
-                            <View style={styles.placementDecoration} />
+                            <LinearGradient
+                                colors={['#0055ff', '#0044cc']}
+                                style={styles.placementGradient}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                            >
+                                <View style={styles.placementDecoration} />
 
-                            <View style={styles.companyHeader}>
-                                <View style={styles.companyIcon}>
-                                    <MaterialCommunityIcons name="briefcase-variant" size={24} color="#fff" />
-                                </View>
-                                <View>
-                                    <View style={styles.badgeContainer}>
-                                        <View style={styles.newBadge}>
-                                            <Text style={styles.newBadgeText}>NEW</Text>
-                                        </View>
-                                        <Text style={styles.updateText}>Updated 2h ago</Text>
+                                <View style={styles.companyHeader}>
+                                    <View style={styles.companyIcon}>
+                                        <MaterialCommunityIcons name="briefcase-variant" size={24} color="#fff" />
                                     </View>
-                                    <Text style={styles.companyName}>TechCorp Systems</Text>
-                                    <Text style={styles.jobRole}>Jr. Software Engineer</Text>
+                                    <View>
+                                        <View style={styles.badgeContainer}>
+                                            <View style={styles.newBadge}>
+                                                <Text style={styles.newBadgeText}>NEW</Text>
+                                            </View>
+                                            <Text style={styles.updateText}>Recently Added</Text>
+                                        </View>
+                                        <Text style={styles.companyName}>{recentJobs[0].companyName}</Text>
+                                        <Text style={styles.jobRole}>{recentJobs[0].role}</Text>
+                                    </View>
                                 </View>
-                            </View>
 
-                            <View style={styles.placementFooter}>
-                                <View>
-                                    <Text style={styles.footerLabel}>DRIVE DATE</Text>
-                                    <Text style={styles.footerValue}>Oct 24, 2023</Text>
+                                <View style={styles.placementFooter}>
+                                    <View>
+                                        <Text style={styles.footerLabel}>DRIVE DATE</Text>
+                                        <Text style={styles.footerValue}>{recentJobs[0].date}</Text>
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={styles.footerLabel}>PACKAGE</Text>
+                                        <Text style={styles.footerValue}>{recentJobs[0].package}</Text>
+                                    </View>
                                 </View>
-                                <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={styles.footerLabel}>PACKAGE</Text>
-                                    <Text style={styles.footerValue}>12 LPA</Text>
-                                </View>
-                            </View>
-                        </LinearGradient>
-                    </TouchableOpacity>
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    ) : (
+                        <View style={{ padding: 20, alignItems: 'center', backgroundColor: 'white', borderRadius: 12 }}>
+                            <Text style={{ color: '#9aa2b1' }}>No active placement drives.</Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* Upcoming Events Section */}
@@ -142,85 +210,42 @@ export default function StudentDashboard({ navigation }) {
                     </View>
 
                     <View style={styles.eventsList}>
-                        {/* Event 1 */}
-                        <TouchableOpacity style={styles.eventCard}>
-                            <View style={[styles.dateBox, { backgroundColor: '#eff6ff', color: '#0055ff' }]}>
-                                <Text style={[styles.dateMonth, { color: '#0055ff' }]}>OCT</Text>
-                                <Text style={styles.dateDay}>12</Text>
-                            </View>
-                            <View style={styles.eventInfo}>
-                                <Text style={styles.eventTitle}>Mid-Term Exams</Text>
-                                <View style={styles.eventMeta}>
-                                    <MaterialCommunityIcons name="clock-outline" size={14} color="#5e6d8d" />
-                                    <Text style={styles.eventMetaText}>10:00 AM • Room 302</Text>
-                                </View>
-                            </View>
-                            <MaterialCommunityIcons name="chevron-right" size={24} color="#d1d5db" />
-                        </TouchableOpacity>
+                        {events.map((event, index) => {
+                            // Helper to parse date if needed, assuming ISO string for now
+                            const eventDate = new Date(event.date);
+                            const month = eventDate.toLocaleString('default', { month: 'short' }).toUpperCase();
+                            const day = eventDate.getDate();
 
-                        {/* Event 2 */}
-                        <TouchableOpacity style={styles.eventCard}>
-                            <View style={[styles.dateBox, { backgroundColor: '#fff7ed' }]}>
-                                <Text style={[styles.dateMonth, { color: '#ea580c' }]}>OCT</Text>
-                                <Text style={styles.dateDay}>15</Text>
+                            return (
+                                <TouchableOpacity key={event.id || index} style={styles.eventCard}>
+                                    <View style={[styles.dateBox, { backgroundColor: index % 2 === 0 ? '#eff6ff' : '#fff7ed' }]}>
+                                        <Text style={[styles.dateMonth, { color: index % 2 === 0 ? '#0055ff' : '#ea580c' }]}>{month}</Text>
+                                        <Text style={styles.dateDay}>{day}</Text>
+                                    </View>
+                                    <View style={styles.eventInfo}>
+                                        <Text style={styles.eventTitle}>{event.title}</Text>
+                                        <View style={styles.eventMeta}>
+                                            <MaterialCommunityIcons name="clock-outline" size={14} color="#5e6d8d" />
+                                            <Text style={styles.eventMetaText}>{event.time} • {event.location}</Text>
+                                        </View>
+                                    </View>
+                                    <MaterialCommunityIcons name="chevron-right" size={24} color="#d1d5db" />
+                                </TouchableOpacity>
+                            );
+                        })}
+                        {events.length === 0 && (
+                            <View style={{ padding: 10 }}>
+                                <Text style={{ color: '#9aa2b1' }}>No upcoming events.</Text>
                             </View>
-                            <View style={styles.eventInfo}>
-                                <Text style={styles.eventTitle}>Project Submission</Text>
-                                <View style={styles.eventMeta}>
-                                    <MaterialCommunityIcons name="clock-outline" size={14} color="#5e6d8d" />
-                                    <Text style={styles.eventMetaText}>11:59 PM • Online</Text>
-                                </View>
-                            </View>
-                            <MaterialCommunityIcons name="chevron-right" size={24} color="#d1d5db" />
-                        </TouchableOpacity>
-
-                        {/* Event 3 */}
-                        <TouchableOpacity style={styles.eventCard}>
-                            <View style={[styles.dateBox, { backgroundColor: '#faf5ff' }]}>
-                                <Text style={[styles.dateMonth, { color: '#9333ea' }]}>OCT</Text>
-                                <Text style={styles.dateDay}>20</Text>
-                            </View>
-                            <View style={styles.eventInfo}>
-                                <Text style={styles.eventTitle}>Guest Lecture</Text>
-                                <View style={styles.eventMeta}>
-                                    <MaterialCommunityIcons name="map-marker-outline" size={14} color="#5e6d8d" />
-                                    <Text style={styles.eventMetaText}>Auditorium</Text>
-                                </View>
-                            </View>
-                            <MaterialCommunityIcons name="chevron-right" size={24} color="#d1d5db" />
-                        </TouchableOpacity>
+                        )}
                     </View>
                 </View>
 
                 {/* Spacer for bottom tab bar */}
-                <View style={{ height: 80 }} />
+                <View style={{ height: 20 }} />
             </ScrollView>
 
-            {/* Bottom Tab Bar (Custom Implementation for Visual Fidelity) */}
-            <View style={styles.bottomBar}>
-                <View style={styles.tabItemsContainer}>
-                    <TouchableOpacity style={styles.tabItem}>
-                        <MaterialCommunityIcons name="view-dashboard" size={26} color="#0055ff" />
-                        <Text style={[styles.tabLabel, { color: '#0055ff', fontWeight: 'bold' }]}>Home</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Attendance')}>
-                        <MaterialCommunityIcons name="book-open-page-variant" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Attendance</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Placement')}>
-                        <MaterialCommunityIcons name="briefcase" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Jobs</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.tabItem} onPress={logout}>
-                        {/* Using Profile icon for Logout temporarily as per design, but functional */}
-                        <MaterialCommunityIcons name="account" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Profile</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
+            {/* Bottom Tab Bar Removed - Handled by Navigator */}
         </View>
     );
 }
@@ -245,8 +270,8 @@ const styles = StyleSheet.create({
     statCard: { flex: 1, backgroundColor: 'white', borderRadius: 16, padding: 16, elevation: 2, overflow: 'hidden' },
     statHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
     statIconContainer: { padding: 10, borderRadius: 12 },
-    trendBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 2 },
-    trendText: { fontSize: 10, fontWeight: 'bold', color: '#16a34a' },
+    trendBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 2 },
+    trendText: { fontSize: 10, fontWeight: 'bold' },
     statContent: {},
     statValue: { fontSize: 24, fontWeight: 'bold', color: '#101318' },
     statLabel: { fontSize: 10, fontWeight: '600', color: '#9aa2b1', marginTop: 4, letterSpacing: 0.5 },
@@ -282,10 +307,5 @@ const styles = StyleSheet.create({
     eventInfo: { flex: 1 },
     eventTitle: { fontSize: 14, fontWeight: 'bold', color: '#101318', marginBottom: 2 },
     eventMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    eventMetaText: { fontSize: 12, color: '#5e6d8d', fontWeight: '500' },
-
-    bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(255,255,255,0.9)', borderTopWidth: 1, borderTopColor: '#f3f4f6', height: 80, paddingBottom: 20 },
-    tabItemsContainer: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', height: '100%' },
-    tabItem: { alignItems: 'center', gap: 4, padding: 8, width: 64 },
-    tabLabel: { fontSize: 10, color: '#9aa2b1', fontWeight: '500' }
+    eventMetaText: { fontSize: 12, color: '#5e6d8d', fontWeight: '500' }
 });

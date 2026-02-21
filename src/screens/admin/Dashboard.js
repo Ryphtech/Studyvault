@@ -1,14 +1,34 @@
-import React, { useContext } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image } from 'react-native';
-import { Text } from 'react-native-paper';
+import { Text, ActivityIndicator } from 'react-native-paper';
 import { AuthContext } from '../../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { subscribeToAdminStats } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
 export default function AdminDashboard({ navigation }) {
     const { logout } = useContext(AuthContext);
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToAdminStats((data) => {
+            setStats(data);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#0055ff" />
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -50,7 +70,7 @@ export default function AdminDashboard({ navigation }) {
                             </View>
                         </View>
                         <View>
-                            <Text style={styles.statValueWhite}>2,450</Text>
+                            <Text style={styles.statValueWhite}>{stats?.totalStudents || 0}</Text>
                             <Text style={styles.statLabelWhite}>Total Students</Text>
                         </View>
                     </LinearGradient>
@@ -66,7 +86,7 @@ export default function AdminDashboard({ navigation }) {
                             </View>
                         </View>
                         <View>
-                            <Text style={styles.statValueDark}>128</Text>
+                            <Text style={styles.statValueDark}>{stats?.totalFaculty || 0}</Text>
                             <Text style={styles.statLabelDark}>Faculty Members</Text>
                         </View>
                     </View>
@@ -120,29 +140,21 @@ export default function AdminDashboard({ navigation }) {
                 </View>
 
                 <View style={styles.updatesList}>
-                    {/* Update 1 */}
-                    <View style={styles.updateCard}>
-                        <View style={[styles.updateIconBox, { backgroundColor: '#dcfce7', color: '#16a34a' }]}>
-                            <MaterialCommunityIcons name="check-circle" size={20} color="#16a34a" />
+                    {stats?.recentActivity?.map((activity, index) => (
+                        <View key={index} style={styles.updateCard}>
+                            <View style={[styles.updateIconBox, { backgroundColor: activity.type === 'warning' ? '#fef3c7' : '#dcfce7', color: activity.type === 'warning' ? '#d97706' : '#16a34a' }]}>
+                                <MaterialCommunityIcons name={activity.type === 'warning' ? "alert" : "check-circle"} size={20} color={activity.type === 'warning' ? '#d97706' : '#16a34a'} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.updateTitle}>{activity.title}</Text>
+                                <Text style={styles.updateDesc} numberOfLines={2}>{activity.desc}</Text>
+                                <Text style={styles.updateTime}>{activity.time}</Text>
+                            </View>
                         </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.updateTitle}>New Student Enrollment Complete</Text>
-                            <Text style={styles.updateDesc} numberOfLines={2}>Batch 2024 admissions have been finalized. 120 new students added.</Text>
-                            <Text style={styles.updateTime}>2 hours ago</Text>
-                        </View>
-                    </View>
-
-                    {/* Update 2 */}
-                    <View style={styles.updateCard}>
-                        <View style={[styles.updateIconBox, { backgroundColor: '#fef3c7', color: '#d97706' }]}>
-                            <MaterialCommunityIcons name="alert" size={20} color="#d97706" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.updateTitle}>Pending Faculty Leave Requests</Text>
-                            <Text style={styles.updateDesc} numberOfLines={2}>You have 3 pending leave approvals for the Computer Science department.</Text>
-                            <Text style={styles.updateTime}>5 hours ago</Text>
-                        </View>
-                    </View>
+                    ))}
+                    {(!stats?.recentActivity || stats.recentActivity.length === 0) && (
+                        <Text style={{ color: '#9ca3af', textAlign: 'center' }}>No recent admin updates.</Text>
+                    )}
                 </View>
 
                 <View style={{ height: 100 }} />
@@ -158,15 +170,15 @@ export default function AdminDashboard({ navigation }) {
 
                     <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('ManageStudents')}>
                         <MaterialCommunityIcons name="account-group-outline" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Users</Text>
+                        <Text style={styles.tabLabel}>Students</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.tabItem}>
-                        <MaterialCommunityIcons name="chart-bar" size={26} color="#9aa2b1" />
-                        <Text style={styles.tabLabel}>Reports</Text>
+                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('ManageFaculty')}>
+                        <MaterialCommunityIcons name="account-tie-outline" size={26} color="#9aa2b1" />
+                        <Text style={styles.tabLabel}>Faculty</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.tabItem} onPress={logout}>
+                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Settings')}>
                         <MaterialCommunityIcons name="cog-outline" size={26} color="#9aa2b1" />
                         <Text style={styles.tabLabel}>Settings</Text>
                     </TouchableOpacity>
