@@ -3,12 +3,15 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshCont
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getActiveDrives } from '../../services/firestoreService';
+import { getActiveDrives, getStudentApplications } from '../../services/firestoreService';
+import { AuthContext } from '../../context/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 export default function PlacementsScreen({ navigation }) {
+    const { user } = React.useContext(AuthContext);
     const [drives, setDrives] = useState([]);
+    const [appliedDriveIds, setAppliedDriveIds] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -20,12 +23,17 @@ export default function PlacementsScreen({ navigation }) {
             const data = await getActiveDrives();
             setDrives(data);
 
-            // Just picking the first one as hero for now, or find one with isDream=true
             if (data.length > 0) {
                 setHeroDrive(data[0]);
             }
+
+            if (user?.uid) {
+                const applications = await getStudentApplications(user.uid);
+                const appliedIds = applications.map(app => app.driveId);
+                setAppliedDriveIds(appliedIds);
+            }
         } catch (error) {
-            console.error("Error fetching drives:", error);
+            console.error("Error fetching drives/applications:", error);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -33,8 +41,13 @@ export default function PlacementsScreen({ navigation }) {
     };
 
     useEffect(() => {
-        fetchDrives();
-    }, []);
+        // Fetch when the screen focuses, not just on mount, to catch newly applied drives
+        const unsubscribe = navigation.addListener('focus', () => {
+            fetchDrives();
+        });
+
+        return unsubscribe;
+    }, [navigation, user?.uid]);
 
     const onRefresh = () => {
         setRefreshing(true);
@@ -110,9 +123,23 @@ export default function PlacementsScreen({ navigation }) {
                             </View>
                         </View>
 
-                        <TouchableOpacity style={styles.applyButton}>
-                            <Text style={styles.applyButtonText}>Apply Now</Text>
-                        </TouchableOpacity>
+                        {appliedDriveIds.includes(heroDrive.id) ? (
+                            <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+                                <View style={[styles.applyButton, { flex: 1, marginTop: 0, backgroundColor: 'rgba(255,255,255,0.2)', elevation: 0 }]}>
+                                    <Text style={[styles.applyButtonText, { color: 'white' }]}>Applied</Text>
+                                </View>
+                                <TouchableOpacity
+                                    style={[styles.applyButton, { flex: 1, marginTop: 0 }]}
+                                    onPress={() => navigation.navigate('DriveResults', { driveId: heroDrive.id })}
+                                >
+                                    <Text style={styles.applyButtonText}>Show Results</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <TouchableOpacity style={styles.applyButton} onPress={() => navigation.navigate('ApplyDrive', { driveId: heroDrive.id })}>
+                                <Text style={styles.applyButtonText}>Apply Now</Text>
+                            </TouchableOpacity>
+                        )}
                     </LinearGradient>
                 )}
 
@@ -157,9 +184,23 @@ export default function PlacementsScreen({ navigation }) {
                                     <MaterialCommunityIcons name="calendar-clock" size={14} color="#5e6d8d" />
                                     <Text style={styles.metaText}>{drive.date}</Text>
                                 </View>
-                                <TouchableOpacity style={styles.smallApplyButton}>
-                                    <Text style={styles.smallApplyText}>Apply</Text>
-                                </TouchableOpacity>
+                                {appliedDriveIds.includes(drive.id) ? (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <TouchableOpacity
+                                            style={[styles.smallApplyButton, { backgroundColor: 'white', borderWidth: 1, borderColor: '#0055ff', paddingVertical: 6, paddingHorizontal: 12, elevation: 0, shadowOpacity: 0 }]}
+                                            onPress={() => navigation.navigate('DriveResults', { driveId: drive.id })}
+                                        >
+                                            <Text style={[styles.smallApplyText, { color: '#0055ff' }]}>Results</Text>
+                                        </TouchableOpacity>
+                                        <View style={styles.appliedBadge}>
+                                            <Text style={styles.appliedText}>Applied</Text>
+                                        </View>
+                                    </View>
+                                ) : (
+                                    <TouchableOpacity style={styles.smallApplyButton} onPress={() => navigation.navigate('ApplyDrive', { driveId: drive.id })}>
+                                        <Text style={styles.smallApplyText}>Apply</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         </TouchableOpacity>
                     ))}

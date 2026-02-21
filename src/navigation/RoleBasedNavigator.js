@@ -31,7 +31,7 @@ export default function RoleBasedNavigator() {
                 role === 'student' ? <StudentNavigator /> :
                     role === 'faculty' ? <FacultyNavigator /> :
                         role === 'admin' ? <AdminNavigator /> :
-                            role === 'placement' ? <PlacementNavigator /> :
+                            role === 'placement_officer' ? <PlacementNavigator /> :
                                 <StudentNavigator /> // Default fallback
             ) : (
                 <AuthNavigator />

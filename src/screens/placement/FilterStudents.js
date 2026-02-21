@@ -1,57 +1,45 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, Image, ActivityIndicator } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { subscribeToUsersByRole } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
-// Mock Data
-const departments = ['CSE', 'ECE', 'MECH', 'IT', 'CIVIL'];
-const initialSkills = ['Java', 'Figma'];
-
-const studentResults = [
-    {
-        id: 1,
-        name: 'Priya Sharma',
-        studentId: '21CS045',
-        cgpa: '9.2',
-        dept: 'CSE',
-        year: 'Yr 4',
-        avatar: 'https://randomuser.me/api/portraits/women/44.jpg',
-        statusColor: '#22c55e', // green
-        deptColor: 'blue',
-        cgpaColor: 'green'
-    },
-    {
-        id: 2,
-        name: 'Rahul Verma',
-        studentId: '21ME012',
-        cgpa: '8.1',
-        dept: 'MECH',
-        year: 'Yr 4',
-        avatar: 'https://randomuser.me/api/portraits/men/32.jpg',
-        statusColor: '#d1d5db', // gray
-        deptColor: 'orange',
-        cgpaColor: 'amber'
-    },
-    {
-        id: 3,
-        name: 'Ananya Das',
-        studentId: '21EC088',
-        cgpa: '8.8',
-        dept: 'ECE',
-        year: 'Yr 4',
-        avatar: 'https://randomuser.me/api/portraits/women/68.jpg',
-        statusColor: '#22c55e', // green
-        deptColor: 'purple',
-        cgpaColor: 'green'
-    }
-];
+// Mock Data for filters
+const departments = ['CSE', 'ECE', 'MECH', 'IT', 'CIVIL', 'Computer Science'];
+const initialSkills = [];
 
 export default function FilterStudents({ navigation }) {
-    const [selectedDept, setSelectedDept] = useState('CSE');
+    const [selectedDept, setSelectedDept] = useState('All');
     const [skills, setSkills] = useState(initialSkills);
     const [skillInput, setSkillInput] = useState('');
+    const [minCgpa, setMinCgpa] = useState('7.5');
+    const [maxCgpa, setMaxCgpa] = useState('10.0');
+
+    const [students, setStudents] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToUsersByRole('student', (fetchedUsers) => {
+            const mappedStudents = fetchedUsers.map(user => ({
+                id: user.uid,
+                name: user.name || 'Unnamed Student',
+                studentId: user.email ? user.email.split('@')[0] : user.uid.substring(0, 8),
+                cgpa: user.cgpa ? user.cgpa.toString() : '0.0',
+                dept: user.department || 'Unknown',
+                year: `Sem ${user.semester || 1}`,
+                avatar: user.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'Student')}&background=random`,
+                statusColor: '#22c55e', // Fixed to green for now
+                deptColor: 'blue',
+                cgpaColor: parseFloat(user.cgpa || 0) >= 8.0 ? 'green' : 'amber'
+            }));
+            setStudents(mappedStudents);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, []);
 
     const removeSkill = (skillToRemove) => {
         setSkills(skills.filter(skill => skill !== skillToRemove));
@@ -63,6 +51,19 @@ export default function FilterStudents({ navigation }) {
             setSkillInput('');
         }
     };
+
+    // Filter Logic
+    const filteredStudents = students.filter(student => {
+        const studentCgpa = parseFloat(student.cgpa) || 0;
+        const min = parseFloat(minCgpa) || 0;
+        const max = parseFloat(maxCgpa) || 10;
+
+        const matchesCgpa = studentCgpa >= min && studentCgpa <= max;
+        const matchesDept = selectedDept === 'All' || student.dept === selectedDept;
+
+        // Optionally filter by skills here if student had a skills array
+        return matchesCgpa && matchesDept;
+    });
 
     const getBadgeStyle = (color) => {
         switch (color) {
@@ -94,32 +95,38 @@ export default function FilterStudents({ navigation }) {
 
                 {/* Filters Section */}
                 <View style={styles.filtersCard}>
-                    {/* CGPA Slider (Visual Mockup) */}
+                    {/* CGPA Range Inputs */}
                     <View style={styles.filterGroup}>
                         <View style={styles.sliderHeader}>
                             <Text style={styles.filterLabel}>CGPA Range</Text>
                             <View style={styles.rangeBadge}>
-                                <Text style={styles.rangeText}>7.5 - 9.8</Text>
+                                <Text style={styles.rangeText}>{minCgpa || '0'} - {maxCgpa || '10'}</Text>
                             </View>
                         </View>
-                        <View style={styles.sliderContainer}>
-                            <View style={styles.sliderTrack} />
-                            <View style={styles.sliderActiveTrack} />
-                            <View style={[styles.sliderThumb, { left: '15%' }]}>
-                                <View style={styles.thumbTooltip}>
-                                    <Text style={styles.tooltipText}>7.5</Text>
-                                </View>
+                        <View style={styles.cgpaInputRow}>
+                            <View style={styles.cgpaInputBox}>
+                                <Text style={styles.cgpaLabel}>Min</Text>
+                                <TextInput
+                                    style={styles.cgpaTextInput}
+                                    keyboardType="numeric"
+                                    maxLength={4}
+                                    value={minCgpa}
+                                    onChangeText={setMinCgpa}
+                                    placeholder="0.0"
+                                />
                             </View>
-                            <View style={[styles.sliderThumb, { right: '20%' }]}>
-                                <View style={styles.thumbTooltip}>
-                                    <Text style={styles.tooltipText}>9.8</Text>
-                                </View>
+                            <Text style={styles.cgpaDivider}>→</Text>
+                            <View style={styles.cgpaInputBox}>
+                                <Text style={styles.cgpaLabel}>Max</Text>
+                                <TextInput
+                                    style={styles.cgpaTextInput}
+                                    keyboardType="numeric"
+                                    maxLength={4}
+                                    value={maxCgpa}
+                                    onChangeText={setMaxCgpa}
+                                    placeholder="10.0"
+                                />
                             </View>
-                        </View>
-                        <View style={styles.sliderLabels}>
-                            <Text style={styles.sliderLabelText}>0.0</Text>
-                            <Text style={styles.sliderLabelText}>5.0</Text>
-                            <Text style={styles.sliderLabelText}>10.0</Text>
                         </View>
                     </View>
 
@@ -127,6 +134,12 @@ export default function FilterStudents({ navigation }) {
                     <View style={styles.filterGroup}>
                         <Text style={styles.filterLabel}>Department</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsContainer}>
+                            <TouchableOpacity
+                                style={[styles.chip, selectedDept === 'All' && styles.chipActive]}
+                                onPress={() => setSelectedDept('All')}
+                            >
+                                <Text style={[styles.chipText, selectedDept === 'All' && styles.chipTextActive]}>All</Text>
+                            </TouchableOpacity>
                             {departments.map((dept) => (
                                 <TouchableOpacity
                                     key={dept}
@@ -174,49 +187,63 @@ export default function FilterStudents({ navigation }) {
                 <View style={styles.resultsHeader}>
                     <Text style={styles.resultsTitle}>RESULTS</Text>
                     <View style={styles.countBadge}>
-                        <Text style={styles.countText}>45 Found</Text>
+                        <Text style={styles.countText}>{filteredStudents.length} Found</Text>
                     </View>
                 </View>
 
                 {/* Results List */}
-                <View style={styles.resultsList}>
-                    {studentResults.map((student) => {
-                        const cgpaStyle = getBadgeStyle(student.cgpaColor);
-                        const deptStyle = getBadgeStyle(student.deptColor);
-                        return (
-                            <TouchableOpacity key={student.id} style={styles.studentCard}>
-                                <View style={styles.cardTop}>
-                                    <View style={styles.avatarContainer}>
-                                        <Image source={{ uri: student.avatar }} style={styles.avatar} />
-                                        <View style={[styles.statusDot, { backgroundColor: student.statusColor }]} />
-                                    </View>
-                                    <View style={styles.studentInfo}>
-                                        <View style={styles.infoHeader}>
-                                            <View>
-                                                <Text style={styles.studentName}>{student.name}</Text>
-                                                <Text style={styles.studentId}>ID: {student.studentId}</Text>
+                {loading ? (
+                    <View style={{ padding: 32, alignItems: 'center' }}>
+                        <ActivityIndicator color="#0055ff" size="large" />
+                        <Text style={{ marginTop: 12, color: '#64748b' }}>Loading students...</Text>
+                    </View>
+                ) : (
+                    <View style={styles.resultsList}>
+                        {filteredStudents.length === 0 ? (
+                            <View style={{ padding: 32, alignItems: 'center' }}>
+                                <MaterialCommunityIcons name="account-search-outline" size={48} color="#cbd5e1" />
+                                <Text style={{ marginTop: 12, color: '#64748b', fontSize: 16 }}>No students found matching filters.</Text>
+                            </View>
+                        ) : (
+                            filteredStudents.map((student) => {
+                                const cgpaStyle = getBadgeStyle(student.cgpaColor);
+                                const deptStyle = getBadgeStyle(student.deptColor);
+                                return (
+                                    <TouchableOpacity key={student.id} style={styles.studentCard}>
+                                        <View style={styles.cardTop}>
+                                            <View style={styles.avatarContainer}>
+                                                <Image source={{ uri: student.avatar }} style={styles.avatar} />
+                                                <View style={[styles.statusDot, { backgroundColor: student.statusColor }]} />
                                             </View>
-                                            <TouchableOpacity style={styles.chevronButton}>
-                                                <MaterialCommunityIcons name="chevron-right" size={24} color="#0055ff" />
-                                            </TouchableOpacity>
+                                            <View style={styles.studentInfo}>
+                                                <View style={styles.infoHeader}>
+                                                    <View>
+                                                        <Text style={styles.studentName}>{student.name}</Text>
+                                                        <Text style={styles.studentId}>ID: {student.studentId}</Text>
+                                                    </View>
+                                                    <TouchableOpacity style={styles.chevronButton}>
+                                                        <MaterialCommunityIcons name="chevron-right" size={24} color="#0055ff" />
+                                                    </TouchableOpacity>
+                                                </View>
+                                                <View style={styles.tagsContainer}>
+                                                    <View style={[styles.infoBadge, { backgroundColor: cgpaStyle.bg, borderColor: cgpaStyle.border }]}>
+                                                        <MaterialCommunityIcons name="school" size={14} color={cgpaStyle.text} />
+                                                        <Text style={[styles.badgeText, { color: cgpaStyle.text }]}>CGPA {student.cgpa}</Text>
+                                                    </View>
+                                                    <View style={[styles.infoBadge, { backgroundColor: deptStyle.bg, borderColor: deptStyle.border }]}>
+                                                        <MaterialCommunityIcons name="console" size={14} color={deptStyle.text} />
+                                                        <Text style={[styles.badgeText, { color: deptStyle.text }]}>{student.dept}</Text>
+                                                    </View>
+                                                    <Text style={styles.yearText}>{student.year}</Text>
+                                                </View>
+                                            </View>
                                         </View>
-                                        <View style={styles.tagsContainer}>
-                                            <View style={[styles.infoBadge, { backgroundColor: cgpaStyle.bg, borderColor: cgpaStyle.border }]}>
-                                                <MaterialCommunityIcons name="school" size={14} color={cgpaStyle.text} />
-                                                <Text style={[styles.badgeText, { color: cgpaStyle.text }]}>CGPA {student.cgpa}</Text>
-                                            </View>
-                                            <View style={[styles.infoBadge, { backgroundColor: deptStyle.bg, borderColor: deptStyle.border }]}>
-                                                <MaterialCommunityIcons name="console" size={14} color={deptStyle.text} />
-                                                <Text style={[styles.badgeText, { color: deptStyle.text }]}>{student.dept}</Text>
-                                            </View>
-                                            <Text style={styles.yearText}>{student.year}</Text>
-                                        </View>
-                                    </View>
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
+                                    </TouchableOpacity>
+                                );
+                            })
+                        )}
+                    </View>
+                )}
 
                 <View style={{ height: 100 }} />
             </ScrollView>
@@ -246,18 +273,15 @@ const styles = StyleSheet.create({
     filterGroup: { marginBottom: 24 },
     filterLabel: { fontSize: 16, fontWeight: '600', color: '#0f172a', marginBottom: 12 },
 
-    // Slider Styles
-    sliderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    rangeBadge: { backgroundColor: 'rgba(0, 85, 255, 0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+    // CGPA Input Styles
+    sliderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+    rangeBadge: { backgroundColor: 'rgba(0, 85, 255, 0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
     rangeText: { fontSize: 14, fontWeight: 'bold', color: '#0055ff' },
-    sliderContainer: { height: 48, justifyContent: 'center' },
-    sliderTrack: { height: 6, backgroundColor: '#e2e8f0', borderRadius: 3, width: '100%', position: 'absolute' },
-    sliderActiveTrack: { height: 6, backgroundColor: '#0055ff', borderRadius: 3, position: 'absolute', left: '15%', right: '20%' },
-    sliderThumb: { width: 24, height: 24, borderRadius: 12, backgroundColor: 'white', borderWidth: 4, borderColor: '#0055ff', position: 'absolute', top: 12, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, elevation: 4 },
-    thumbTooltip: { position: 'absolute', top: -32, backgroundColor: 'transparent' },
-    tooltipText: { fontSize: 12, fontWeight: '500', color: '#64748b' },
-    sliderLabels: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
-    sliderLabelText: { fontSize: 12, color: '#94a3b8', fontWeight: '500' },
+    cgpaInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+    cgpaInputBox: { flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    cgpaLabel: { fontSize: 12, color: '#64748b', fontWeight: '500' },
+    cgpaTextInput: { fontSize: 16, fontWeight: 'bold', color: '#0f172a', textAlign: 'right', minWidth: 40 },
+    cgpaDivider: { fontSize: 18, color: '#94a3b8' },
 
     chipsContainer: { gap: 8 },
     chip: { flexDirection: 'row', height: 36, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#f1f5f9', alignItems: 'center', gap: 8 },

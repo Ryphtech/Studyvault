@@ -10,6 +10,9 @@ import MarksScreen from '../screens/student/Marks';
 import EventsScreen from '../screens/student/Events';
 import StudentProfile from '../screens/student/StudentProfile';
 import PlacementsScreen from '../screens/student/Placements';
+import ApplyDrive from '../screens/student/ApplyDrive';
+import EditProfile from '../screens/student/EditProfile';
+import DriveResults from '../screens/student/DriveResults';
 import SettingsScreen from '../screens/common/SettingsScreen';
 
 // Placeholders for other student screens
@@ -74,6 +77,9 @@ export default function StudentNavigator() {
             <Stack.Screen name="Profile" component={StudentProfile} />
             <Stack.Screen name="Marks" component={MarksScreen} />
             <Stack.Screen name="Notes" component={PlaceholderScreen} />
+            <Stack.Screen name="ApplyDrive" component={ApplyDrive} />
+            <Stack.Screen name="EditProfile" component={EditProfile} />
+            <Stack.Screen name="DriveResults" component={DriveResults} />
 
             {/* Note: If Placements/Events/Settings need detail screens, add them here */}
         </Stack.Navigator>

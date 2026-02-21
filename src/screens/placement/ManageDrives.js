@@ -1,283 +1,378 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput } from 'react-native';
-import { Text } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-
-const { width } = Dimensions.get('window');
-
-// Mock Data
-const activeDrives = [
-    {
-        id: 1,
-        company: 'TechCorp Solutions',
-        role: 'Software Engineer',
-        package: '₹12 LPA',
-        deadline: 'Today, 5:00 PM',
-        registered: 142,
-        icon: 'office-building',
-        status: 'Registration Open',
-        statusColor: 'green'
-    },
-    {
-        id: 2,
-        company: 'BuildWell Constructions',
-        role: 'Civil Engineer',
-        package: '₹6.5 LPA',
-        deadline: 'Nov 02, 2023',
-        registered: 18,
-        driveDate: 'Nov 02, 2023',
-        eligibility: 'Civil Dept.',
-        icon: 'factory',
-        status: 'Upcoming',
-        statusColor: 'blue'
-    }
-];
-
-const pastDrives = [
-    {
-        id: 3,
-        company: 'Innovate Systems',
-        role: 'Analyst',
-        package: '₹8 LPA',
-        date: 'Oct 15, 2023',
-        placed: 12,
-        icon: 'briefcase',
-        status: 'Completed'
-    },
-    {
-        id: 4,
-        company: 'RetailGiant',
-        role: 'Management Trainee',
-        package: '₹5 LPA',
-        date: 'Sep 28, 2023',
-        placed: 5,
-        icon: 'store',
-        status: 'Completed'
-    }
-];
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { createPlacementDrive } from '../../services/firestoreService';
 
 export default function ManageDrives({ navigation }) {
-    const [searchQuery, setSearchQuery] = useState('');
+    const insets = useSafeAreaInsets();
+    const [formData, setFormData] = useState({
+        companyName: '',
+        jobRole: '',
+        package: '',
+        minCgpa: '',
+        applicationDeadline: '',
+        description: ''
+    });
 
-    const getStatusStyle = (color) => {
-        switch (color) {
-            case 'green': return { bg: '#dcfce7', text: '#15803d', border: '#16a34a' };
-            case 'blue': return { bg: '#eff6ff', text: '#1d4ed8', border: '#2563eb' };
-            default: return { bg: '#f3f4f6', text: '#374151', border: '#6b7280' };
+    const [loading, setLoading] = useState(false);
+
+    const handleChange = (field, value) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handlePostDrive = async () => {
+        if (!formData.companyName || !formData.jobRole || !formData.package || !formData.minCgpa) {
+            alert("Please fill in all mandatory fields.");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const driveData = {
+                companyName: formData.companyName,
+                role: formData.jobRole,
+                package: formData.package + " LPA",
+                date: formData.applicationDeadline || "TBD", // using user input deadline
+                description: formData.description,
+                eligibility: `CGPA > ${formData.minCgpa}`,
+                type: "Full Time", // Optional default
+                isNew: true
+            };
+
+            await createPlacementDrive(driveData);
+            alert("Placement Drive Posted Successfully!");
+            navigation.goBack();
+        } catch (error) {
+            console.error(error);
+            alert("Failed to post drive: " + error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
         <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
-                <View style={styles.headerTop}>
-                    <View style={styles.headerLeft}>
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                            <MaterialCommunityIcons name="arrow-left" size={24} color="#1f2937" />
-                        </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Placement Drives</Text>
-                    </View>
-                    <TouchableOpacity style={styles.historyButton}>
-                        <MaterialCommunityIcons name="history" size={24} color="#1f2937" />
-                    </TouchableOpacity>
-                </View>
-
-                {/* Search Bar */}
-                <View style={styles.searchRow}>
-                    <View style={styles.searchContainer}>
-                        <MaterialCommunityIcons name="magnify" size={20} color="#9ca3af" style={styles.searchIcon} />
-                        <TextInput
-                            style={styles.searchInput}
-                            placeholder="Search companies, roles..."
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                        />
-                    </View>
-                    <TouchableOpacity style={styles.filterButton}>
-                        <MaterialCommunityIcons name="filter-variant" size={24} color="#4b5563" />
-                    </TouchableOpacity>
-                </View>
+            {/* Sticky Header */}
+            <View style={[styles.header, { paddingTop: Math.max(insets.top, 48) }]}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
+                    <MaterialCommunityIcons name="chevron-left" size={28} color="#334155" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>New Placement Drive</Text>
+                {/* Spacer for centering */}
+                <View style={{ width: 44 }} />
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
-                {/* Active Drives Section */}
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Active Drives</Text>
-                    <View style={styles.liveBadge}>
-                        <Text style={styles.liveText}>3 Live</Text>
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : null}
+            >
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {/* Company Section */}
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <MaterialCommunityIcons name="domain" size={20} color="#0055ff" />
+                            <Text style={styles.sectionTitle}>COMPANY INFORMATION</Text>
+                        </View>
+                        <View style={styles.card}>
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.label}>Company Name</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="e.g. Google, Microsoft"
+                                    placeholderTextColor="#9ca3af"
+                                    value={formData.companyName}
+                                    onChangeText={(text) => handleChange('companyName', text)}
+                                />
+                            </View>
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.label}>Job Role</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="e.g. Software Engineer"
+                                    placeholderTextColor="#9ca3af"
+                                    value={formData.jobRole}
+                                    onChangeText={(text) => handleChange('jobRole', text)}
+                                />
+                            </View>
+                        </View>
                     </View>
-                </View>
 
-                <View style={styles.drivesList}>
-                    {activeDrives.map((drive) => {
-                        const style = getStatusStyle(drive.statusColor);
-                        return (
-                            <TouchableOpacity key={drive.id} style={styles.driveCard}>
-                                <View style={styles.cardHeader}>
-                                    <View style={styles.companyInfo}>
-                                        <View style={styles.iconBox}>
-                                            <MaterialCommunityIcons name={drive.icon} size={24} color="#4b5563" />
-                                        </View>
-                                        <View>
-                                            <Text style={styles.companyName}>{drive.company}</Text>
-                                            <Text style={styles.roleInfo}>{drive.role} • {drive.package}</Text>
-                                        </View>
-                                    </View>
-                                    <View style={styles.actionButtons}>
-                                        <TouchableOpacity style={styles.actionIcon}>
-                                            <MaterialCommunityIcons name="pencil-outline" size={20} color="#6b7280" />
-                                        </TouchableOpacity>
-                                        <TouchableOpacity style={styles.actionIcon}>
-                                            <MaterialCommunityIcons name="trash-can-outline" size={20} color="#ef4444" />
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-
-                                <View style={styles.statsGrid}>
-                                    <View style={styles.statRow}>
-                                        <MaterialCommunityIcons name="calendar-clock" size={18} color="#3b82f6" />
-                                        <View>
-                                            <Text style={styles.statLabel}>{drive.status === 'Upcoming' ? 'DRIVE DATE' : 'DEADLINE'}</Text>
-                                            <Text style={styles.statValue}>{drive.status === 'Upcoming' ? drive.driveDate : drive.deadline}</Text>
-                                        </View>
-                                    </View>
-                                    <View style={styles.statRow}>
-                                        <MaterialCommunityIcons name={drive.status === 'Upcoming' ? 'school' : 'account-group'} size={18} color="#a855f7" />
-                                        <View>
-                                            <Text style={styles.statLabel}>{drive.status === 'Upcoming' ? 'ELIGIBILITY' : 'REGISTERED'}</Text>
-                                            <Text style={styles.statValue}>{drive.status === 'Upcoming' ? drive.eligibility : `${drive.registered} Students`}</Text>
-                                        </View>
-                                    </View>
-                                </View>
-
-                                <View style={styles.cardFooter}>
-                                    <View style={[styles.statusTag, { backgroundColor: style.bg, borderColor: style.border }]}>
-                                        <Text style={[styles.statusText, { color: style.text }]}>{drive.status}</Text>
-                                    </View>
-                                    <TouchableOpacity style={styles.viewDetailsButton}>
-                                        <Text style={styles.viewDetailsText}>View Details</Text>
-                                        <MaterialCommunityIcons name="arrow-right" size={16} color="#0055ff" />
-                                    </TouchableOpacity>
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
-
-                {/* Past Drives Section */}
-                <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-                    <Text style={styles.sectionTitle}>Past Drives</Text>
-                </View>
-
-                <View style={styles.drivesList}>
-                    {pastDrives.map((drive) => (
-                        <TouchableOpacity key={drive.id} style={[styles.driveCard, { opacity: 0.9 }]}>
-                            <View style={styles.cardHeader}>
-                                <View style={styles.companyInfo}>
-                                    <View style={[styles.iconBox, { backgroundColor: '#f3f4f6' }]}>
-                                        <MaterialCommunityIcons name={drive.icon} size={24} color="#9ca3af" />
-                                    </View>
-                                    <View>
-                                        <Text style={[styles.companyName, { color: '#374151' }]}>{drive.company}</Text>
-                                        <Text style={styles.roleInfo}>{drive.role} • {drive.package}</Text>
-                                    </View>
-                                </View>
-                                <View style={[styles.statusTag, { backgroundColor: '#f3f4f6' }]}>
-                                    <Text style={[styles.statusText, { color: '#4b5563' }]}>Completed</Text>
+                    {/* Eligibility & Compensation */}
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <MaterialCommunityIcons name="cash-multiple" size={20} color="#0055ff" />
+                            <Text style={styles.sectionTitle}>COMPENSATION & ELIGIBILITY</Text>
+                        </View>
+                        <View style={styles.cardRowContainer}>
+                            <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
+                                <Text style={styles.label}>Package (LPA)</Text>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={[styles.input, { paddingRight: 40 }]}
+                                        placeholder="12.5"
+                                        placeholderTextColor="#9ca3af"
+                                        keyboardType="numeric"
+                                        value={formData.package}
+                                        onChangeText={(text) => handleChange('package', text)}
+                                    />
+                                    <Text style={styles.inputSuffix}>LPA</Text>
                                 </View>
                             </View>
-
-                            <View style={styles.pastStatsRow}>
-                                <View style={styles.placedInfo}>
-                                    <MaterialCommunityIcons name="check-circle" size={18} color="#9ca3af" />
-                                    <Text style={styles.placedText}>{drive.placed} Students Placed</Text>
-                                </View>
-                                <Text style={styles.pastDate}>{drive.date}</Text>
+                            <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
+                                <Text style={styles.label}>Min. CGPA</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="7.5"
+                                    placeholderTextColor="#9ca3af"
+                                    keyboardType="numeric"
+                                    value={formData.minCgpa}
+                                    onChangeText={(text) => handleChange('minCgpa', text)}
+                                />
                             </View>
+                        </View>
+                    </View>
 
-                            <View style={styles.cardFooter}>
-                                <TouchableOpacity style={styles.viewReportButton}>
-                                    <Text style={styles.viewReportText}>View Report</Text>
-                                </TouchableOpacity>
-                                <View style={styles.actionButtons}>
-                                    <TouchableOpacity style={styles.actionIcon}>
-                                        <MaterialCommunityIcons name="pencil-outline" size={18} color="#9ca3af" />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity style={styles.actionIcon}>
-                                        <MaterialCommunityIcons name="trash-can-outline" size={18} color="#9ca3af" />
-                                    </TouchableOpacity>
-                                </View>
+                    {/* Timeline */}
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <MaterialCommunityIcons name="calendar-month-outline" size={20} color="#0055ff" />
+                            <Text style={styles.sectionTitle}>TIMELINE</Text>
+                        </View>
+                        <View style={styles.card}>
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.label}>Application Deadline</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="YYYY-MM-DD HH:MM"
+                                    placeholderTextColor="#9ca3af"
+                                    value={formData.applicationDeadline}
+                                    onChangeText={(text) => handleChange('applicationDeadline', text)}
+                                />
+                                <Text style={styles.helperText}>Format: YYYY-MM-DD HH:MM (e.g. 2024-12-31 23:59)</Text>
                             </View>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+                        </View>
+                    </View>
 
-                <View style={{ height: 100 }} />
-            </ScrollView>
+                    {/* Description */}
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <MaterialCommunityIcons name="file-document-outline" size={20} color="#0055ff" />
+                            <Text style={styles.sectionTitle}>JOB DETAILS</Text>
+                        </View>
+                        <View style={styles.card}>
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.label}>Detailed Description</Text>
+                                <TextInput
+                                    style={[styles.input, styles.textArea]}
+                                    placeholder="Describe job requirements, selection process, and other details..."
+                                    placeholderTextColor="#9ca3af"
+                                    multiline
+                                    numberOfLines={6}
+                                    textAlignVertical="top"
+                                    value={formData.description}
+                                    onChangeText={(text) => handleChange('description', text)}
+                                />
+                            </View>
+                        </View>
+                    </View>
 
-            {/* FAB */}
-            <TouchableOpacity style={styles.fab}>
-                <MaterialCommunityIcons name="plus" size={32} color="white" />
-            </TouchableOpacity>
+                    {/* Visual Asset (Decorative card) */}
+                    <View style={styles.readyCard}>
+                        <View style={styles.readyCardContent}>
+                            <View>
+                                <Text style={styles.readyTitle}>Ready to publish?</Text>
+                                <Text style={styles.readySubtitle}>Review all details before posting to students.</Text>
+                            </View>
+                            <MaterialCommunityIcons name="bullhorn-outline" size={40} color="rgba(255,255,255,0.5)" />
+                        </View>
+                    </View>
+
+                    {/* Spacer for footer */}
+                    <View style={{ height: 100 }} />
+                </ScrollView>
+            </KeyboardAvoidingView>
+
+            {/* Bottom Action Button */}
+            <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+                <TouchableOpacity style={styles.submitButton} onPress={handlePostDrive} disabled={loading}>
+                    {loading ? (
+                        <ActivityIndicator color="white" />
+                    ) : (
+                        <>
+                            <MaterialCommunityIcons name="send" size={20} color="white" />
+                            <Text style={styles.submitButtonText}>Post Placement Drive</Text>
+                        </>
+                    )}
+                </TouchableOpacity>
+            </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f5f6f8' },
-
-    header: { paddingHorizontal: 16, paddingTop: 48, paddingBottom: 16, backgroundColor: 'rgba(245, 246, 248, 0.95)', borderBottomWidth: 1, borderBottomColor: 'rgba(229, 231, 235, 0.5)' },
-    headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#f3f4f6' },
-    headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
-    historyButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-
-    searchRow: { flexDirection: 'row', gap: 12 },
-    searchContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 12, paddingHorizontal: 12, height: 48, borderWidth: 1, borderColor: '#e5e7eb' },
-    searchIcon: { marginRight: 8 },
-    searchInput: { flex: 1, fontSize: 14, color: '#111827' },
-    filterButton: { width: 48, height: 48, borderRadius: 12, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e5e7eb' },
-
-    scrollContent: { padding: 16 },
-
-    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
-    liveBadge: { backgroundColor: '#dcfce7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
-    liveText: { fontSize: 12, fontWeight: 'bold', color: '#15803d' },
-
-    drivesList: { gap: 16 },
-    driveCard: { backgroundColor: 'white', borderRadius: 16, padding: 16, gap: 12, borderWidth: 1, borderColor: '#f3f4f6', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-    companyInfo: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-    iconBox: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' },
-    companyName: { fontSize: 16, fontWeight: 'bold', color: '#111827' },
-    roleInfo: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-
-    actionButtons: { flexDirection: 'row', gap: 8 },
-    actionIcon: { padding: 6, borderRadius: 8, backgroundColor: '#f9fafb' },
-
-    statsGrid: { flexDirection: 'row', gap: 16, backgroundColor: '#f9fafb', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#f3f4f6' },
-    statRow: { flexDirection: 'row', gap: 8, alignItems: 'center', flex: 1 },
-    statLabel: { fontSize: 10, color: '#6b7280', fontWeight: 'bold', textTransform: 'uppercase' },
-    statValue: { fontSize: 12, fontWeight: 'bold', color: '#1f2937' },
-
-    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f9fafb' },
-    statusTag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'transparent' },
-    statusText: { fontSize: 10, fontWeight: '600' },
-    viewDetailsButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    viewDetailsText: { fontSize: 12, fontWeight: '600', color: '#0055ff' },
-
-    pastStatsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 },
-    placedInfo: { flexDirection: 'row', gap: 6, alignItems: 'center' },
-    placedText: { fontSize: 12, fontWeight: '500', color: '#4b5563' },
-    pastDate: { fontSize: 12, color: '#9ca3af' },
-
-    viewReportButton: {},
-    viewReportText: { fontSize: 12, fontWeight: '500', color: '#6b7280' },
-
-    fab: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#0055ff', justifyContent: 'center', alignItems: 'center', shadowColor: '#0055ff', shadowOpacity: 0.4, shadowRadius: 4, elevation: 6 }
+    container: {
+        flex: 1,
+        backgroundColor: '#f5f6f8',
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingBottom: 16,
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        borderBottomWidth: 1,
+        borderBottomColor: '#e2e8f0',
+        zIndex: 10,
+    },
+    iconButton: {
+        padding: 8,
+        borderRadius: 20,
+        backgroundColor: '#f1f5f9',
+    },
+    headerTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#0f172a',
+        letterSpacing: -0.5,
+    },
+    scrollContent: {
+        padding: 16,
+        paddingTop: 24,
+    },
+    section: {
+        marginBottom: 24,
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+        gap: 8,
+    },
+    sectionTitle: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#64748b',
+        letterSpacing: 1,
+    },
+    card: {
+        backgroundColor: 'white',
+        borderRadius: 16,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        gap: 16,
+    },
+    cardRowContainer: {
+        backgroundColor: 'white',
+        borderRadius: 16,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    inputContainer: {
+        flexDirection: 'column',
+    },
+    label: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1e293b',
+        marginBottom: 6,
+        marginLeft: 4,
+    },
+    inputWrapper: {
+        position: 'relative',
+        justifyContent: 'center',
+    },
+    input: {
+        backgroundColor: '#f8fafc',
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        fontSize: 15,
+        color: '#0f172a',
+    },
+    textArea: {
+        minHeight: 120,
+        paddingTop: 16,
+    },
+    inputSuffix: {
+        position: 'absolute',
+        right: 16,
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#94a3b8',
+    },
+    helperText: {
+        fontSize: 12,
+        color: '#94a3b8',
+        marginTop: 6,
+        marginLeft: 4,
+    },
+    readyCard: {
+        backgroundColor: '#0055ff',
+        borderRadius: 16,
+        overflow: 'hidden',
+        height: 128,
+        justifyContent: 'center',
+    },
+    readyCardContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 24,
+        height: '100%',
+        backgroundColor: 'rgba(0, 162, 255, 0.1)', // Slight gradient effect simulated
+    },
+    readyTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: 'white',
+        marginBottom: 4,
+    },
+    readySubtitle: {
+        fontSize: 12,
+        color: '#eff6ff',
+        opacity: 0.9,
+    },
+    footer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        borderTopWidth: 1,
+        borderTopColor: '#e2e8f0',
+        padding: 16,
+        paddingTop: 16,
+    },
+    submitButton: {
+        backgroundColor: '#0055ff',
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 16,
+        gap: 8,
+        shadowColor: '#0055ff',
+        shadowOpacity: 0.25,
+        shadowOffset: { width: 0, height: 4 },
+        shadowRadius: 10,
+        elevation: 6,
+    },
+    submitButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
 });

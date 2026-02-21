@@ -1,61 +1,29 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, Image, ActivityIndicator } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { getPlacedStudents } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
-// Mock Data
-const results = [
-    {
-        id: 1,
-        name: 'Sarah Khan',
-        branch: 'CSE • 2024 Batch',
-        studentId: '2020CSE042',
-        avatar: 'https://randomuser.me/api/portraits/women/44.jpg',
-        status: 'ACCEPTED',
-        statusColor: 'green',
-        company: 'Google',
-        role: 'Software Engineer',
-        package: '₹24 LPA',
-        packageType: 'Base + Stock',
-        companyIcon: 'google',
-        actions: ['View Offer', 'Send Email']
-    },
-    {
-        id: 2,
-        name: 'Rahul Mehta',
-        branch: 'ECE • 2024 Batch',
-        studentId: '2020ECE118',
-        avatar: 'https://randomuser.me/api/portraits/men/32.jpg',
-        status: 'OFFER RECEIVED',
-        statusColor: 'blue',
-        company: 'Amazon',
-        role: 'SDE-1',
-        package: '₹18 LPA',
-        packageType: 'Fixed',
-        companyIcon: 'amazon',
-        actions: ['Update Status']
-    },
-    {
-        id: 3,
-        name: 'Anjali Verma',
-        branch: 'Civil • 2024 Batch',
-        studentId: '2020CIV005',
-        avatar: 'https://randomuser.me/api/portraits/women/68.jpg',
-        status: 'JOINED',
-        statusColor: 'purple',
-        company: 'L&T',
-        role: 'Graduate Trainee',
-        package: '₹6.5 LPA',
-        packageType: 'CTC',
-        companyIcon: 'factory',
-        actions: ['View Joining Letter']
-    }
-];
-
 export default function Results({ navigation }) {
     const [searchQuery, setSearchQuery] = useState('');
+    const [results, setResults] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchResults = async () => {
+            try {
+                const data = await getPlacedStudents();
+                setResults(data);
+            } catch (error) {
+                console.error("Error fetching placed students:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchResults();
+    }, []);
 
     const getStatusStyle = (color) => {
         switch (color) {
@@ -141,72 +109,87 @@ export default function Results({ navigation }) {
 
                 {/* Results List */}
                 <View style={styles.resultsList}>
-                    {results.map((item) => {
-                        const style = getStatusStyle(item.statusColor);
-                        return (
-                            <View key={item.id} style={styles.card}>
-                                <View style={styles.cardHeader}>
-                                    <View style={styles.studentInfo}>
-                                        <Image source={{ uri: item.avatar }} style={styles.avatar} />
-                                        <View>
-                                            <Text style={styles.studentName}>{item.name}</Text>
-                                            <Text style={styles.studentBranch}>{item.branch}</Text>
-                                            <Text style={styles.studentId}>ID: {item.studentId}</Text>
+                    {loading ? (
+                        <View style={{ padding: 40, alignItems: 'center' }}>
+                            <ActivityIndicator size="large" color="#0055ff" />
+                            <Text style={{ marginTop: 12, color: '#6b7280' }}>Loading results...</Text>
+                        </View>
+                    ) : results.length === 0 ? (
+                        <View style={{ padding: 40, alignItems: 'center', backgroundColor: 'white', borderRadius: 16 }}>
+                            <MaterialCommunityIcons name="clipboard-text-outline" size={48} color="#d1d5db" />
+                            <Text style={{ marginTop: 12, color: '#6b7280' }}>No placement results available.</Text>
+                        </View>
+                    ) : (
+                        results.filter(item =>
+                            (item.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            (item.company || '').toLowerCase().includes(searchQuery.toLowerCase())
+                        ).map((item) => {
+                            const style = getStatusStyle(item.statusColor);
+                            return (
+                                <View key={item.id} style={styles.card}>
+                                    <View style={styles.cardHeader}>
+                                        <View style={styles.studentInfo}>
+                                            <Image source={{ uri: item.avatar }} style={styles.avatar} />
+                                            <View>
+                                                <Text style={styles.studentName}>{item.name}</Text>
+                                                <Text style={styles.studentBranch}>{item.branch}</Text>
+                                                <Text style={styles.studentId}>ID: {item.studentId}</Text>
+                                            </View>
+                                        </View>
+                                        <View style={styles.statusContainer}>
+                                            <View style={[styles.statusBadge, { backgroundColor: style.bg, borderColor: style.border }]}>
+                                                <Text style={[styles.statusText, { color: style.text }]}>{item.status}</Text>
+                                            </View>
+                                            <TouchableOpacity>
+                                                <MaterialCommunityIcons name="dots-horizontal" size={24} color="#9ca3af" />
+                                            </TouchableOpacity>
                                         </View>
                                     </View>
-                                    <View style={styles.statusContainer}>
-                                        <View style={[styles.statusBadge, { backgroundColor: style.bg, borderColor: style.border }]}>
-                                            <Text style={[styles.statusText, { color: style.text }]}>{item.status}</Text>
-                                        </View>
-                                        <TouchableOpacity>
-                                            <MaterialCommunityIcons name="dots-horizontal" size={24} color="#9ca3af" />
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
 
-                                <View style={styles.offerBox}>
-                                    <View style={styles.companyInfo}>
-                                        <View style={styles.logoBox}>
-                                            <MaterialCommunityIcons name={item.companyIcon} size={20} color="#4b5563" />
+                                    <View style={styles.offerBox}>
+                                        <View style={styles.companyInfo}>
+                                            <View style={styles.logoBox}>
+                                                <MaterialCommunityIcons name={item.companyIcon} size={20} color="#4b5563" />
+                                            </View>
+                                            <View>
+                                                <Text style={styles.companyName}>{item.company}</Text>
+                                                <Text style={styles.roleName}>{item.role}</Text>
+                                            </View>
                                         </View>
-                                        <View>
-                                            <Text style={styles.companyName}>{item.company}</Text>
-                                            <Text style={styles.roleName}>{item.role}</Text>
+                                        <View style={styles.packageInfo}>
+                                            <Text style={styles.packageValue}>{item.package}</Text>
+                                            <Text style={styles.packageType}>{item.packageType}</Text>
                                         </View>
                                     </View>
-                                    <View style={styles.packageInfo}>
-                                        <Text style={styles.packageValue}>{item.package}</Text>
-                                        <Text style={styles.packageType}>{item.packageType}</Text>
-                                    </View>
-                                </View>
 
-                                <View style={styles.actionsRow}>
-                                    {item.actions.map((action, index) => (
-                                        <TouchableOpacity
-                                            key={index}
-                                            style={[
-                                                styles.actionButton,
-                                                item.actions.length === 1 && styles.actionButtonFull,
-                                                index === 1 && styles.actionButtonPrimary,
-                                                action === 'View Joining Letter' && styles.actionButtonTransparent
-                                            ]}
-                                        >
-                                            {action === 'View Joining Letter' && (
-                                                <MaterialCommunityIcons name="file-document-outline" size={18} color="#6b7280" style={{ marginRight: 6 }} />
-                                            )}
-                                            <Text style={[
-                                                styles.actionText,
-                                                index === 1 && styles.actionTextPrimary,
-                                                action === 'View Joining Letter' && styles.actionTextTransparent
-                                            ]}>
-                                                {action}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
+                                    <View style={styles.actionsRow}>
+                                        {(item.actions || ['View Offer']).map((action, index, arr) => (
+                                            <TouchableOpacity
+                                                key={index}
+                                                style={[
+                                                    styles.actionButton,
+                                                    arr.length === 1 && styles.actionButtonFull,
+                                                    index === 1 && styles.actionButtonPrimary,
+                                                    action === 'View Joining Letter' && styles.actionButtonTransparent
+                                                ]}
+                                            >
+                                                {action === 'View Joining Letter' && (
+                                                    <MaterialCommunityIcons name="file-document-outline" size={18} color="#6b7280" style={{ marginRight: 6 }} />
+                                                )}
+                                                <Text style={[
+                                                    styles.actionText,
+                                                    index === 1 && styles.actionTextPrimary,
+                                                    action === 'View Joining Letter' && styles.actionTextTransparent
+                                                ]}>
+                                                    {action}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
                                 </View>
-                            </View>
-                        );
-                    })}
+                            );
+                        })
+                    )}
                 </View>
 
                 <View style={{ height: 100 }} />

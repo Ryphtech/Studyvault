@@ -125,6 +125,37 @@ export const getUserProfile = async (uid) => {
     }
 };
 
+export const updateUserProfile = async (userId, data) => {
+    try {
+        const docRef = doc(db, "users", userId);
+
+        // Helper function to recursively remove undefined properties
+        const removeUndefinedPaths = (obj) => {
+            return Object.entries(obj).reduce((acc, [k, v]) => {
+                if (v === undefined) return acc;
+                if (typeof v === 'object' && v !== null && !Array.isArray(v) && !(v instanceof Date)) {
+                    const cleaned = removeUndefinedPaths(v);
+                    if (Object.keys(cleaned).length > 0) {
+                        acc[k] = cleaned;
+                    }
+                } else {
+                    acc[k] = v;
+                }
+                return acc;
+            }, {});
+        };
+
+        const cleanData = removeUndefinedPaths(data);
+
+        // Merge true so it only updates the provided fields without wiping out existing ones (e.g., authentication flags, role)
+        await setDoc(docRef, cleanData, { merge: true });
+        return true;
+    } catch (e) {
+        console.error("Error updating profile", e);
+        return false;
+    }
+};
+
 export const subscribeToUsersByRole = (role, callback) => {
     const q = query(
         collection(db, "users"),
@@ -241,10 +272,75 @@ export const getUpcomingEvents = async (limitCount = 5) => {
 };
 
 // --- Placements ---
+export const applyForDrive = async (driveId, studentId, applicationData) => {
+    try {
+        const docRef = await addDoc(collection(db, "applications"), {
+            driveId,
+            studentId,
+            ...applicationData,
+            status: 'Applied',
+            statusColor: 'gray',
+            appliedAt: new Date().toISOString()
+        });
+        return { success: true, id: docRef.id };
+    } catch (e) {
+        console.error("Error applying for drive:", e);
+        return { success: false, error: e.message };
+    }
+};
+
+export const getStudentApplications = async (studentId) => {
+    try {
+        const q = query(
+            collection(db, "applications"),
+            where("studentId", "==", studentId)
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (e) {
+        console.error("Error fetching student applications:", e);
+        return [];
+    }
+};
+
 export const getActiveDrives = async () => {
-    const q = query(collection(db, "placements"));
+    const q = query(collection(db, "placements"), orderBy("date", "desc"));
     const snap = await getDocs(q);
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+};
+
+export const getDriveById = async (driveId) => {
+    try {
+        const docRef = doc(db, "placements", driveId);
+        const docSnap = await getDoc(docRef);
+        return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
+    } catch (e) {
+        console.error("Error fetching drive by ID:", e);
+        return null;
+    }
+};
+
+export const subscribeToActiveDrives = (callback) => {
+    const q = query(collection(db, "placements"), orderBy("date", "desc"));
+    return onSnapshot(q, (snapshot) => {
+        const drives = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        callback(drives);
+    }, (error) => {
+        console.error("Error subscribing to active drives:", error);
+    });
+};
+
+export const createPlacementDrive = async (driveData) => {
+    try {
+        const docRef = await addDoc(collection(db, "placements"), {
+            ...driveData,
+            createdAt: new Date().toISOString()
+        });
+        return { id: docRef.id, ...driveData };
+    } catch (e) {
+        console.error("Error creating placement drive:", e);
+        throw e;
+    }
 };
 
 export const getRecentJobs = async (limitCount = 5) => {
@@ -266,6 +362,61 @@ export const getPlacedStudents = async () => {
     } catch (e) {
         console.error("Error fetching placed students:", e);
         return [];
+    }
+};
+
+export const subscribeToPlacedStudents = (callback) => {
+    const q = query(collection(db, "placed_students"));
+    return onSnapshot(q, (snapshot) => {
+        const students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        callback(students);
+    }, (error) => {
+        console.error("Error subscribing to placed students:", error);
+    });
+};
+
+export const subscribeToDriveStudents = (driveId, callback) => {
+    const q = query(
+        collection(db, "applications"),
+        where("driveId", "==", driveId)
+    );
+
+    return onSnapshot(q, async (snapshot) => {
+        const applications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        const studentsData = await Promise.all(applications.map(async (app) => {
+            const profile = await getUserProfile(app.studentId);
+            return {
+                id: app.id, // Application ID
+                studentRollNo: profile?.id || app.studentId.substring(0, 8).toUpperCase(),
+                name: profile?.name || 'Unknown Student',
+                dept: profile?.department || profile?.academicDetails?.department || 'N/A',
+                status: app.status || 'Applied',
+                statusColor: app.statusColor || 'gray',
+            };
+        }));
+
+        callback(studentsData);
+    }, (error) => {
+        console.error("Error subscribing to drive students:", error);
+    });
+};
+
+export const updateApplicationStatuses = async (updates) => {
+    try {
+        const batch = writeBatch(db);
+        updates.forEach(update => {
+            const appRef = doc(db, "applications", update.id);
+            batch.update(appRef, {
+                status: update.status,
+                statusColor: update.statusColor
+            });
+        });
+        await batch.commit();
+        return true;
+    } catch (e) {
+        console.error("Error updating application statuses:", e);
+        return false;
     }
 };
 

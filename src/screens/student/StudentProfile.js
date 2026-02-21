@@ -33,21 +33,21 @@ export default function StudentProfile({ navigation }) {
 
     // fallback data if fields are missing in firestore
     const stats = [
-        { label: 'CGPA', value: profile?.cgpa || 'N/A', color: '#0055ff' },
+        { label: 'CGPA', value: profile?.cgpa || profile?.academicDetails?.cgpa || 'N/A', color: '#0055ff' },
         { label: 'Semester', value: profile?.semester ? `${profile.semester}th` : 'N/A', color: '#101318' },
-        { label: 'Grad Year', value: '2025', color: '#101318' }, // Hardcoded for now in schema
+        { label: 'Grad Year', value: profile?.academicDetails?.expectedGraduation || '2025', color: '#101318' },
     ];
 
     const personalDetails = [
-        { icon: 'calendar-month', label: 'Date of Birth', value: profile?.dob || 'N/A' },
-        { icon: 'account', label: 'Gender', value: profile?.gender || 'N/A' },
-        { icon: 'water', label: 'Blood Group', value: profile?.bloodGroup || 'N/A' },
+        { icon: 'calendar-month', label: 'Date of Birth', value: profile?.personalDetails?.dob || profile?.dob || 'N/A' },
+        { icon: 'account', label: 'Gender', value: profile?.personalDetails?.gender || profile?.gender || 'N/A' },
+        { icon: 'water', label: 'Blood Group', value: profile?.personalDetails?.bloodGroup || profile?.bloodGroup || 'N/A' },
     ];
 
     const contactInfo = [
         { icon: 'email', label: 'Email', value: profile?.email || user?.email || 'N/A', action: 'content-copy' },
-        { icon: 'phone', label: 'Phone', value: profile?.phone || 'N/A', action: 'message-text' },
-        { icon: 'map-marker', label: 'Address', value: profile?.address || 'N/A' },
+        { icon: 'phone', label: 'Phone', value: profile?.contactDetails?.phone || profile?.phone || 'N/A', action: 'message-text' },
+        { icon: 'map-marker', label: 'Address', value: profile?.contactDetails?.address || profile?.address || 'N/A' },
     ];
 
     return (
@@ -61,7 +61,7 @@ export default function StudentProfile({ navigation }) {
                 </View>
                 <Text style={styles.headerTitle}>My Profile</Text>
                 <View style={{ width: 48, alignItems: 'flex-end' }}>
-                    <TouchableOpacity>
+                    <TouchableOpacity onPress={() => navigation.navigate('EditProfile')}>
                         <Text style={styles.editButton}>Edit</Text>
                     </TouchableOpacity>
                 </View>

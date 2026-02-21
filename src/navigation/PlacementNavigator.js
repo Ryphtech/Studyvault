@@ -10,6 +10,7 @@ const PlaceholderScreen = ({ route }) => (
 );
 
 import ManageDrives from '../screens/placement/ManageDrives';
+import ManageDriveResults from '../screens/placement/ManageDriveResults';
 
 import FilterStudents from '../screens/placement/FilterStudents';
 
@@ -26,6 +27,7 @@ export default function PlacementNavigator() {
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Dashboard" component={PlacementDashboard} options={{ title: 'Placement Cell' }} />
             <Stack.Screen name="Drives" component={ManageDrives} />
+            <Stack.Screen name="ManageDriveResults" component={ManageDriveResults} />
             <Stack.Screen name="FilterStudents" component={FilterStudents} />
             <Stack.Screen name="Results" component={Results} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
