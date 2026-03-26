@@ -3,6 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, KeyboardAvoi
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import { AuthContext } from '../../context/AuthContext';
 import { getUserProfile, updateUserProfile } from '../../services/firestoreService';
 
@@ -15,13 +16,13 @@ export default function EditProfile({ navigation }) {
 
     // Mock initial state based on HTML
     const [profileData, setProfileData] = useState({
-        fullName: 'Alex Johnson',
-        department: 'Computer Science Dept.',
-        cgpa: '3.80',
-        semester: '6th',
-        gradYear: '2025',
-        dob: '2001-04-12',
-        gender: 'Male',
+        fullName: '',
+        department: '',
+        cgpa: '',
+        semester: '',
+        gradYear: '',
+        dob: '',
+        gender: '',
         email: '',
         phone: '',
         dorm: '',
@@ -56,6 +57,25 @@ export default function EditProfile({ navigation }) {
 
     const updateField = (field, value) => {
         setProfileData(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleImagePick = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            alert('Sorry, we need camera roll permissions to make this work!');
+            return;
+        }
+
+        let result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.5,
+        });
+
+        if (!result.canceled) {
+            setProfileData(prev => ({ ...prev, profileImage: result.assets[0].uri }));
+        }
     };
 
     const handleSave = async () => {
@@ -132,7 +152,7 @@ export default function EditProfile({ navigation }) {
                 <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
                     {/* Profile Photo Section */}
-                    <View style={styles.photoSection}>
+                    <TouchableOpacity style={styles.photoSection} onPress={handleImagePick}>
                         <View style={styles.photoContainer}>
                             <Image
                                 source={{ uri: profileData.profileImage }}
@@ -141,12 +161,12 @@ export default function EditProfile({ navigation }) {
                             <View style={styles.photoOverlay}>
                                 <MaterialCommunityIcons name="camera-plus" size={32} color="white" />
                             </View>
-                            <TouchableOpacity style={styles.editIconBadge}>
+                            <View style={styles.editIconBadge}>
                                 <MaterialCommunityIcons name="pencil" size={20} color="white" />
-                            </TouchableOpacity>
+                            </View>
                         </View>
                         <Text style={styles.changePhotoText}>Change Photo</Text>
-                    </View>
+                    </TouchableOpacity>
 
                     <View style={styles.formContainer}>
                         {/* Academic Information */}

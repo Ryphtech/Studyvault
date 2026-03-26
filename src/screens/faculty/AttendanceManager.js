@@ -1,22 +1,39 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image } from 'react-native';
+import React, { useState, useEffect, useContext } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, ActivityIndicator, Alert } from 'react-native';
 import { Text, Switch } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { AuthContext } from '../../context/AuthContext';
+import { getStudentsForAttendance, saveAttendance, getUserProfile } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
-// Mock Data for Students
-const initialStudents = [
-    { id: 124, name: 'Sarah Jenks', roll: '124', status: 'P', avatar: 'https://randomuser.me/api/portraits/women/44.jpg' },
-    { id: 125, name: 'Michael Chen', roll: '125', status: 'A', avatar: 'https://randomuser.me/api/portraits/men/32.jpg' },
-    { id: 126, name: 'Emily Davis', roll: '126', status: 'L', avatar: 'https://randomuser.me/api/portraits/women/68.jpg' },
-    { id: 127, name: 'David Wilson', roll: '127', status: 'P', avatar: 'https://randomuser.me/api/portraits/men/85.jpg' },
-    { id: 128, name: 'Jessica Brown', roll: '128', status: 'P', avatar: 'https://randomuser.me/api/portraits/women/12.jpg' },
-];
-
-export default function AttendanceManager({ navigation }) {
-    const [students, setStudents] = useState(initialStudents);
+export default function AttendanceManager({ route, navigation }) {
+    const { user } = useContext(AuthContext);
+    const [students, setStudents] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [markAllPresent, setMarkAllPresent] = useState(false);
+    const [profile, setProfile] = useState(null);
+
+    // Get course info from navigation params
+    const courseId = route?.params?.courseId || '';
+    const courseName = route?.params?.courseName || '';
+
+    useEffect(() => {
+        const init = async () => {
+            // Fetch the faculty profile for header display
+            if (user?.uid) {
+                const profileData = await getUserProfile(user.uid);
+                setProfile(profileData);
+            }
+            if (courseId) {
+                const data = await getStudentsForAttendance(courseId);
+                setStudents(data);
+            }
+            setLoading(false);
+        };
+        init();
+    }, []);
 
     const toggleStatus = (id, newStatus) => {
         setStudents(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s));
@@ -35,18 +52,31 @@ export default function AttendanceManager({ navigation }) {
         return acc;
     }, { P: 0, A: 0, L: 0 });
 
+    const handleSubmit = async () => {
+        setSaving(true);
+        const success = await saveAttendance(courseId, courseName, new Date(), students);
+        setSaving(false);
+
+        if (success) {
+            Alert.alert("Success", "Attendance saved successfully!");
+            navigation.goBack();
+        } else {
+            Alert.alert("Error", "Failed to save attendance. Please try again.");
+        }
+    };
+
     return (
         <View style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <View style={styles.avatarContainer}>
-                        <Image source={{ uri: 'https://randomuser.me/api/portraits/men/1.jpg' }} style={styles.facultyAvatar} />
+                        <Image source={{ uri: profile?.profileImage || 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png' }} style={styles.facultyAvatar} />
                         <View style={styles.activeDot} />
                     </View>
                     <View>
-                        <Text style={styles.headerTitle}>Prof. Anderson</Text>
-                        <Text style={styles.headerSubtitle}>Faculty ID: F-204</Text>
+                        <Text style={styles.headerTitle}>{profile?.name || 'Faculty'}</Text>
+                        <Text style={styles.headerSubtitle}>{courseName || 'Select a course'}</Text>
                     </View>
                 </View>
                 <TouchableOpacity style={styles.notificationButton}>
@@ -121,7 +151,7 @@ export default function AttendanceManager({ navigation }) {
                         <View style={styles.dividerVertical} />
                         <View style={{ alignItems: 'flex-end' }}>
                             <Text style={styles.statusLabel}>TOTAL STUDENTS</Text>
-                            <Text style={styles.statusValueNormal}>45</Text>
+                            <Text style={styles.statusValueNormal}>{students.length}</Text>
                         </View>
                     </View>
                 </View>
@@ -142,44 +172,54 @@ export default function AttendanceManager({ navigation }) {
 
                 {/* Student List */}
                 <View style={styles.studentList}>
-                    {students.map((student) => (
-                        <View
-                            key={student.id}
-                            style={[
-                                styles.studentRow,
-                                student.status === 'A' && styles.studentRowAbsent
-                            ]}
-                        >
-                            <View style={styles.studentInfo}>
-                                <Image source={{ uri: student.avatar }} style={styles.studentAvatar} />
-                                <View>
-                                    <Text style={styles.studentName}>{student.name}</Text>
-                                    <Text style={styles.studentRoll}>Roll No: {student.roll}</Text>
+                    {loading ? (
+                        <ActivityIndicator size="large" color="#0055ff" style={{ marginTop: 40 }} />
+                    ) : (
+                        students.map((student) => (
+                            <View
+                                key={student.id}
+                                style={[
+                                    styles.studentRow,
+                                    student.status === 'A' && styles.studentRowAbsent
+                                ]}
+                            >
+                                <View style={styles.studentInfo}>
+                                    {student.avatar ? (
+                                        <Image source={{ uri: student.avatar }} style={styles.studentAvatar} />
+                                    ) : (
+                                        <View style={[styles.studentAvatar, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#e2e8f0' }]}>
+                                            <Text style={{ color: '#475569', fontWeight: 'bold' }}>{student.name.charAt(0)}</Text>
+                                        </View>
+                                    )}
+                                    <View>
+                                        <Text style={styles.studentName}>{student.name}</Text>
+                                        <Text style={styles.studentRoll}>Roll No: {student.roll}</Text>
+                                    </View>
+                                </View>
+
+                                <View style={styles.toggleContainer}>
+                                    <TouchableOpacity
+                                        style={[styles.toggleBtn, student.status === 'P' && styles.toggleBtnPresent]}
+                                        onPress={() => toggleStatus(student.id, 'P')}
+                                    >
+                                        <Text style={[styles.toggleText, student.status === 'P' && styles.toggleTextActive]}>P</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.toggleBtn, student.status === 'A' && styles.toggleBtnAbsent]}
+                                        onPress={() => toggleStatus(student.id, 'A')}
+                                    >
+                                        <Text style={[styles.toggleText, student.status === 'A' && styles.toggleTextActive]}>A</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.toggleBtn, student.status === 'L' && styles.toggleBtnLeave]}
+                                        onPress={() => toggleStatus(student.id, 'L')}
+                                    >
+                                        <Text style={[styles.toggleText, student.status === 'L' && styles.toggleTextActive]}>L</Text>
+                                    </TouchableOpacity>
                                 </View>
                             </View>
-
-                            <View style={styles.toggleContainer}>
-                                <TouchableOpacity
-                                    style={[styles.toggleBtn, student.status === 'P' && styles.toggleBtnPresent]}
-                                    onPress={() => toggleStatus(student.id, 'P')}
-                                >
-                                    <Text style={[styles.toggleText, student.status === 'P' && styles.toggleTextActive]}>P</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.toggleBtn, student.status === 'A' && styles.toggleBtnAbsent]}
-                                    onPress={() => toggleStatus(student.id, 'A')}
-                                >
-                                    <Text style={[styles.toggleText, student.status === 'A' && styles.toggleTextActive]}>A</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.toggleBtn, student.status === 'L' && styles.toggleBtnLeave]}
-                                    onPress={() => toggleStatus(student.id, 'L')}
-                                >
-                                    <Text style={[styles.toggleText, student.status === 'L' && styles.toggleTextActive]}>L</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    ))}
+                        ))
+                    )}
                 </View>
 
                 {/* Upcoming Teaser */}
@@ -211,9 +251,17 @@ export default function AttendanceManager({ navigation }) {
                         <Text style={styles.statLeave}>L: {summary.L}</Text>
                     </View>
                 </View>
-                <TouchableOpacity style={styles.submitButton}>
-                    <MaterialCommunityIcons name="check-circle-outline" size={20} color="white" />
-                    <Text style={styles.submitButtonText}>Submit Attendance</Text>
+                <TouchableOpacity
+                    style={[styles.submitButton, saving && { opacity: 0.7 }]}
+                    onPress={handleSubmit}
+                    disabled={saving || loading}
+                >
+                    {saving ? (
+                        <ActivityIndicator color="white" size="small" />
+                    ) : (
+                        <MaterialCommunityIcons name="check-circle-outline" size={20} color="white" />
+                    )}
+                    <Text style={styles.submitButtonText}>{saving ? 'Saving...' : 'Submit Attendance'}</Text>
                 </TouchableOpacity>
             </View>
         </View>

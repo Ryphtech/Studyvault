@@ -4,14 +4,25 @@ import { Text, ActivityIndicator } from 'react-native-paper';
 import { AuthContext } from '../../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { subscribeToAdminStats } from '../../services/firestoreService';
+import { subscribeToAdminStats, getUserProfile } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
 export default function AdminDashboard({ navigation }) {
-    const { logout } = useContext(AuthContext);
+    const { user, logout } = useContext(AuthContext);
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [adminName, setAdminName] = useState('Admin');
+
+    useEffect(() => {
+        const loadName = async () => {
+            if (user?.uid) {
+                const profile = await getUserProfile(user.uid);
+                if (profile?.name) setAdminName(profile.name.split(' ')[0]);
+            }
+        };
+        loadName();
+    }, [user]);
 
     useEffect(() => {
         const unsubscribe = subscribeToAdminStats((data) => {
@@ -41,10 +52,13 @@ export default function AdminDashboard({ navigation }) {
                     </View>
                     <View>
                         <Text style={styles.headerTitle}>Admin Dashboard</Text>
-                        <Text style={styles.headerSubtitle}>Welcome back, Admin</Text>
+                        <Text style={styles.headerSubtitle}>Welcome back, {adminName}</Text>
                     </View>
                 </View>
-                <TouchableOpacity style={styles.notificationButton}>
+                <TouchableOpacity
+                    style={styles.notificationButton}
+                    onPress={() => navigation.navigate('Notifications')}
+                >
                     <MaterialCommunityIcons name="bell-outline" size={24} color="#101318" />
                 </TouchableOpacity>
             </View>
@@ -109,7 +123,7 @@ export default function AdminDashboard({ navigation }) {
                         <Text style={styles.manageSubtitle}>Admissions & Info</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.manageCard} onPress={() => navigation.navigate('ManageFaculty') || console.warn('Faculty Manager not implemented')}>
+                    <TouchableOpacity style={styles.manageCard} onPress={() => navigation.navigate('ManageFaculty')}>
                         <View style={[styles.manageIconBox, { backgroundColor: '#eef2ff', color: '#4f46e5' }]}>
                             <MaterialCommunityIcons name="cast-education" size={32} color="#4f46e5" />
                         </View>
@@ -125,12 +139,44 @@ export default function AdminDashboard({ navigation }) {
                         <Text style={styles.manageSubtitle}>Calendar & Notices</Text>
                     </TouchableOpacity>
 
+                    <TouchableOpacity style={styles.manageCard} onPress={() => navigation.navigate('ManageSubjects')}>
+                        <View style={[styles.manageIconBox, { backgroundColor: '#f0fdf4', color: '#16a34a' }]}>
+                            <MaterialCommunityIcons name="book-open-page-variant" size={32} color="#16a34a" />
+                        </View>
+                        <Text style={styles.manageTitle}>Subjects</Text>
+                        <Text style={styles.manageSubtitle}>Curriculum Plan</Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity style={styles.manageCard} onPress={() => navigation.navigate('ManageFeedback')}>
                         <View style={[styles.manageIconBox, { backgroundColor: '#fdf2f8', color: '#db2777' }]}>
                             <MaterialCommunityIcons name="message-draw" size={32} color="#db2777" />
                         </View>
                         <Text style={styles.manageTitle}>Feedback</Text>
                         <Text style={styles.manageSubtitle}>Reviews & Surveys</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.manageCard} onPress={() => navigation.navigate('ManageRoleCodes')}>
+                        <View style={[styles.manageIconBox, { backgroundColor: '#fef3c7', color: '#d97706' }]}>
+                            <MaterialCommunityIcons name="shield-key" size={32} color="#d97706" />
+                        </View>
+                        <Text style={styles.manageTitle}>Security Codes</Text>
+                        <Text style={styles.manageSubtitle}>Registration Keys</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.manageCard} onPress={() => navigation.navigate('ManageDepartments')}>
+                        <View style={[styles.manageIconBox, { backgroundColor: '#f0f9ff' }]}>
+                            <MaterialCommunityIcons name="domain" size={32} color="#0284c7" />
+                        </View>
+                        <Text style={styles.manageTitle}>Departments</Text>
+                        <Text style={styles.manageSubtitle}>Add Branches</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.manageCard} onPress={() => navigation.navigate('SendNotification')}>
+                        <View style={[styles.manageIconBox, { backgroundColor: '#fef2f2' }]}>
+                            <MaterialCommunityIcons name="send" size={32} color="#ef4444" />
+                        </View>
+                        <Text style={styles.manageTitle}>Notify</Text>
+                        <Text style={styles.manageSubtitle}>Send Alerts</Text>
                     </TouchableOpacity>
                 </View>
 

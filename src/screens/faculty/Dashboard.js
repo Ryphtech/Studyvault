@@ -16,10 +16,11 @@ export default function FacultyDashboard({ navigation }) {
 
     useEffect(() => {
         const fetchData = async () => {
-            // For demo, if user.uid is strict, ensure it matches seed data or fallback
-            // const facultyId = user?.uid || "faculty_demo"; 
-            // Using "faculty_demo" for consistent seeding visualization if Auth isn't strict yet
-            const facultyId = "faculty_demo";
+            const facultyId = user?.uid;
+            if (!facultyId) {
+                setLoading(false);
+                return;
+            }
 
             try {
                 const [profileData, coursesData] = await Promise.all([
@@ -39,7 +40,7 @@ export default function FacultyDashboard({ navigation }) {
     }, [user]);
 
     // Derived state for next class
-    const nextClass = courses.length > 0 ? courses[0].schedule[0] : null;
+    const nextClass = courses.length > 0 && courses[0].schedule?.length > 0 ? courses[0].schedule[0] : null;
     const nextCourse = courses.length > 0 ? courses[0] : null;
 
     if (loading) {
@@ -65,7 +66,10 @@ export default function FacultyDashboard({ navigation }) {
                         <Text style={styles.headerSubtitle}>Welcome, {facultyName}</Text>
                     </View>
                 </View>
-                <TouchableOpacity style={styles.notificationButton}>
+                <TouchableOpacity
+                    style={styles.notificationButton}
+                    onPress={() => navigation.navigate('Notifications')}
+                >
                     <MaterialCommunityIcons name="bell-outline" size={24} color="#5e6d8d" />
                     <View style={styles.notificationDot} />
                 </TouchableOpacity>
@@ -123,9 +127,9 @@ export default function FacultyDashboard({ navigation }) {
                             <MaterialCommunityIcons name="play" size={20} color="#0055ff" />
                             <Text style={styles.startClassText}>Start Class</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.attendanceButton} onPress={() => navigation.navigate('AttendanceManager')}>
+                        <TouchableOpacity style={[styles.attendanceButton, { backgroundColor: '#94a3b8' }]} disabled={true}>
                             <MaterialCommunityIcons name="qrcode-scan" size={20} color="white" />
-                            <Text style={styles.attendanceButtonText}>Attendance</Text>
+                            <Text style={styles.attendanceButtonText}>Coming Soon</Text>
                         </TouchableOpacity>
                     </View>
                 </LinearGradient>
@@ -166,13 +170,23 @@ export default function FacultyDashboard({ navigation }) {
                         </View>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.actionCard}>
+                    <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('MySchedule')}>
                         <View style={[styles.actionIconBox, { backgroundColor: '#f0fdf4', color: '#16a34a' }]}>
                             <MaterialCommunityIcons name="calendar-month-outline" size={24} color="#16a34a" />
                         </View>
                         <View>
                             <Text style={styles.actionTitle}>My Schedule</Text>
                             <Text style={styles.actionSubtitle}>Weekly view</Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('SendNotification')}>
+                        <View style={[styles.actionIconBox, { backgroundColor: '#fef2f2' }]}>
+                            <MaterialCommunityIcons name="send" size={24} color="#ef4444" />
+                        </View>
+                        <View>
+                            <Text style={styles.actionTitle}>Notify</Text>
+                            <Text style={styles.actionSubtitle}>Send alert</Text>
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -186,8 +200,8 @@ export default function FacultyDashboard({ navigation }) {
                 </View>
 
                 <View style={styles.scheduleList}>
-                    {courses.map((course, index) => (
-                        course.schedule.map((slot, i) => (
+                    {(courses || []).map((course, index) => (
+                        (course.schedule || []).map((slot, i) => (
                             <View key={`${index}-${i}`} style={[styles.scheduleCard, styles.borderBlue]}>
                                 <View style={{ flex: 1 }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -196,7 +210,7 @@ export default function FacultyDashboard({ navigation }) {
                                             <Text style={styles.scheduleSubtitle}>{course.code} • {slot.room}</Text>
                                         </View>
                                         <View style={[styles.statusTag, { backgroundColor: '#eff6ff', borderColor: '#dbeafe' }]}>
-                                            <Text style={[styles.statusText, { color: '#0055ff' }]}>{slot.day.toUpperCase()}</Text>
+                                            <Text style={[styles.statusText, { color: '#0055ff' }]}>{slot.day?.toUpperCase()}</Text>
                                         </View>
                                     </View>
                                     <View style={styles.scheduleTime}>
@@ -207,8 +221,8 @@ export default function FacultyDashboard({ navigation }) {
                             </View>
                         ))
                     ))}
-                    {courses.length === 0 && (
-                        <Text style={{ textAlign: 'center', color: '#9aa2b1' }}>No schedule available.</Text>
+                    {(!courses || courses.length === 0 || courses.every(c => !c.schedule || c.schedule.length === 0)) && (
+                        <Text style={{ textAlign: 'center', color: '#9aa2b1', marginVertical: 20 }}>No scheduled classes available today.</Text>
                     )}
                 </View>
 
@@ -229,7 +243,7 @@ export default function FacultyDashboard({ navigation }) {
                         <Text style={styles.tabLabel}>Classes</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.tabItem}>
+                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('ChatList')}>
                         <MaterialCommunityIcons name="chat-processing-outline" size={26} color="#9aa2b1" />
                         <Text style={styles.tabLabel}>Chat</Text>
                     </TouchableOpacity>

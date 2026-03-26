@@ -10,6 +10,7 @@ import StudentNavigator from './StudentNavigator';
 import FacultyNavigator from './FacultyNavigator';
 import AdminNavigator from './AdminNavigator';
 import PlacementNavigator from './PlacementNavigator';
+import HODNavigator from './HODNavigator';
 
 
 export default function RoleBasedNavigator() {
@@ -32,10 +33,12 @@ export default function RoleBasedNavigator() {
                     role === 'faculty' ? <FacultyNavigator /> :
                         role === 'admin' ? <AdminNavigator /> :
                             role === 'placement_officer' ? <PlacementNavigator /> :
-                                <StudentNavigator /> // Default fallback
+                                role === 'hod' ? <HODNavigator /> :
+                                    <StudentNavigator /> // Default fallback
             ) : (
                 <AuthNavigator />
             )}
         </NavigationContainer>
     );
 }
+

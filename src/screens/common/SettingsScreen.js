@@ -2,8 +2,10 @@ import React, { useState, useContext, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Switch, Dimensions, Alert } from 'react-native';
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../services/firebaseConfig';
 import { AuthContext } from '../../context/AuthContext';
-import { getUserProfile, seedInitialData, removeSeedData } from '../../services/firestoreService';
+import { getUserProfile, seedInitialData, removeSeedData, seedAllCurriculumData, seedFeedbackData, seedNotificationData } from '../../services/firestoreService';
 
 export default function SettingsScreen({ navigation }) {
     const { user, logout } = useContext(AuthContext);
@@ -25,15 +27,74 @@ export default function SettingsScreen({ navigation }) {
     const [pushNotifications, setPushNotifications] = useState(true);
     const [darkMode, setDarkMode] = useState(false);
     const [seeding, setSeeding] = useState(false);
+    const [showSemesterPicker, setShowSemesterPicker] = useState(false);
+    const [updatingSemester, setUpdatingSemester] = useState(false);
+
+    const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8].map(s => ({ label: `Semester ${s}`, value: s }));
+
+    const handleUpdateSemester = async (newSemester) => {
+        setShowSemesterPicker(false);
+        if (profile?.semester === newSemester) return;
+        setUpdatingSemester(true);
+        try {
+            await updateDoc(doc(db, 'users', user.uid), { semester: newSemester });
+            setProfile(prev => ({ ...prev, semester: newSemester }));
+            Alert.alert("Success", "Semester updated successfully.");
+        } catch (error) {
+            console.error("Error updating semester:", error);
+            Alert.alert("Error", "Failed to update semester.");
+        } finally {
+            setUpdatingSemester(false);
+        }
+    };
+
+    const [seedingCurriculum, setSeedingCurriculum] = useState(false);
 
     const handleSeedData = async () => {
         setSeeding(true);
         const success = await seedInitialData(user?.uid);
         setSeeding(false);
         if (success) {
-            Alert.alert("Success", "Database seeded successfully!");
+            Alert.alert("Success", "Basic Database seeded successfully!");
         } else {
             Alert.alert("Error", "Failed to seed database.");
+        }
+    };
+
+    const handleSeedCurriculum = async () => {
+        setSeedingCurriculum(true);
+        const success = await seedAllCurriculumData();
+        setSeedingCurriculum(false);
+        if (success) {
+            Alert.alert("Success", "Curriculum Data seeded across all departments successfully!");
+        } else {
+            Alert.alert("Error", "Failed to seed curriculum data.");
+        }
+    };
+
+    const [seedingFeedback, setSeedingFeedback] = useState(false);
+
+    const handleSeedFeedback = async () => {
+        setSeedingFeedback(true);
+        const success = await seedFeedbackData();
+        setSeedingFeedback(false);
+        if (success) {
+            Alert.alert("Success", "Feedback surveys seeded successfully!");
+        } else {
+            Alert.alert("Error", "Failed to seed feedback data.");
+        }
+    };
+
+    const [seedingNotifications, setSeedingNotifications] = useState(false);
+
+    const handleSeedNotifications = async () => {
+        setSeedingNotifications(true);
+        const success = await seedNotificationData();
+        setSeedingNotifications(false);
+        if (success) {
+            Alert.alert("Success", "Notifications seeded successfully!");
+        } else {
+            Alert.alert("Error", "Failed to seed notifications.");
         }
     };
 
@@ -125,6 +186,22 @@ export default function SettingsScreen({ navigation }) {
                     <MaterialCommunityIcons name="chevron-right" size={24} color="#94a3b8" />
                 </TouchableOpacity>
 
+                {/* Academic Section for Students */}
+                {profile?.role === 'student' && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>ACADEMIC INTERFACE</Text>
+                        <View style={styles.sectionContent}>
+                            {renderSettingItem({
+                                icon: 'school',
+                                color: { bg: '#eff6ff', text: '#0055ff' },
+                                label: 'Change Current Semester',
+                                valueLabel: updatingSemester ? 'Updating...' : (profile?.semester ? `Semester ${profile.semester}` : 'Not Set'),
+                                onPress: () => setShowSemesterPicker(true)
+                            })}
+                        </View>
+                    </View>
+                )}
+
                 {/* Account Section */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>ACCOUNT</Text>
@@ -195,7 +272,8 @@ export default function SettingsScreen({ navigation }) {
                         {renderSettingItem({
                             icon: 'bug',
                             color: { bg: '#fef2f2', text: '#dc2626' },
-                            label: 'Report a Bug'
+                            label: 'Submit Feedback',
+                            onPress: () => navigation.navigate('SubmitFeedback')
                         })}
                         <View style={styles.divider} />
                         {renderSettingItem({
@@ -206,43 +284,67 @@ export default function SettingsScreen({ navigation }) {
                     </View>
                 </View>
 
-                {/* Data Management Section */}
+                {/* Developer Tools Section */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>DEVELOPER</Text>
+                    <Text style={styles.sectionTitle}>DEVELOPER TOOLS</Text>
                     <View style={styles.sectionContent}>
-                        <TouchableOpacity
-                            style={styles.settingItem}
-                            onPress={handleSeedData}
-                            disabled={seeding || removing}
-                        >
-                            <View style={[styles.iconBox, { backgroundColor: '#f0fdf4' }]}>
-                                {seeding ? (
-                                    <ActivityIndicator size="small" color="#16a34a" />
-                                ) : (
-                                    <MaterialCommunityIcons name="database-import" size={20} color="#16a34a" />
-                                )}
-                            </View>
-                            <Text style={styles.settingLabel}>Seed Initial Data</Text>
-                            <MaterialCommunityIcons name="chevron-right" size={24} color="#94a3b8" />
+                        <TouchableOpacity style={styles.devButton} onPress={handleSeedData} disabled={seeding}>
+                            {seeding ? (
+                                <ActivityIndicator size="small" color="white" />
+                            ) : (
+                                <>
+                                    <MaterialCommunityIcons name="database-plus" size={20} color="white" />
+                                    <Text style={styles.devBtnText}>Seed Basic Data (Mock)</Text>
+                                </>
+                            )}
                         </TouchableOpacity>
 
-                        <View style={styles.divider} />
-
-                        <TouchableOpacity
-                            style={styles.settingItem}
-                            onPress={handleRemoveSeedData}
-                            disabled={seeding || removing}
-                        >
-                            <View style={[styles.iconBox, { backgroundColor: '#fef2f2' }]}>
-                                {removing ? (
-                                    <ActivityIndicator size="small" color="#dc2626" />
-                                ) : (
-                                    <MaterialCommunityIcons name="database-remove" size={20} color="#dc2626" />
-                                )}
-                            </View>
-                            <Text style={styles.settingLabel}>Remove Seed Data</Text>
-                            <MaterialCommunityIcons name="chevron-right" size={24} color="#94a3b8" />
+                        <TouchableOpacity style={[styles.devButton, { backgroundColor: '#0d9488', marginTop: 12 }]} onPress={handleSeedCurriculum} disabled={seedingCurriculum}>
+                            {seedingCurriculum ? (
+                                <ActivityIndicator size="small" color="white" />
+                            ) : (
+                                <>
+                                    <MaterialCommunityIcons name="book-education" size={20} color="white" />
+                                    <Text style={styles.devBtnText}>Seed All Curriculum Data</Text>
+                                </>
+                            )}
                         </TouchableOpacity>
+
+                        <TouchableOpacity style={[styles.devButton, { backgroundColor: '#f59e0b', marginTop: 12 }]} onPress={handleSeedFeedback} disabled={seedingFeedback}>
+                            {seedingFeedback ? (
+                                <ActivityIndicator size="small" color="white" />
+                            ) : (
+                                <>
+                                    <MaterialCommunityIcons name="clipboard-check-outline" size={20} color="white" />
+                                    <Text style={styles.devBtnText}>Seed Feedback Data</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={[styles.devButton, { backgroundColor: '#6366f1', marginTop: 12 }]} onPress={handleSeedNotifications} disabled={seedingNotifications}>
+                            {seedingNotifications ? (
+                                <ActivityIndicator size="small" color="white" />
+                            ) : (
+                                <>
+                                    <MaterialCommunityIcons name="bell-plus" size={20} color="white" />
+                                    <Text style={styles.devBtnText}>Seed Notification Data</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={[styles.devButton, { backgroundColor: '#ef4444', marginTop: 12 }]} onPress={handleRemoveSeedData} disabled={removing}>
+                            {removing ? (
+                                <ActivityIndicator size="small" color="white" />
+                            ) : (
+                                <>
+                                    <MaterialCommunityIcons name="database-minus" size={20} color="white" />
+                                    <Text style={styles.devBtnText}>Remove Seed Data</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                        <Text style={styles.devWarningText}>
+                            * Warning: "Remove" clears all collections except specific authenticated users.
+                        </Text>
                     </View>
                 </View>
 
@@ -255,6 +357,40 @@ export default function SettingsScreen({ navigation }) {
                 </View>
 
                 <View style={{ height: 40 }} />
+
+                {/* Semester Picker Dialog */}
+                {showSemesterPicker && (
+                    <View style={[StyleSheet.absoluteFill, { zIndex: 999 }]}>
+                        <TouchableOpacity 
+                            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}
+                            onPress={() => setShowSemesterPicker(false)}
+                            activeOpacity={1}
+                        >
+                            <View style={{ width: '80%', backgroundColor: 'white', borderRadius: 16, overflow: 'hidden' }}>
+                                <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
+                                    <Text style={{ fontSize: 18, fontWeight: '700', color: '#0f172a' }}>Select Current Semester</Text>
+                                </View>
+                                <ScrollView style={{ maxHeight: Dimensions.get('window').height * 0.4 }}>
+                                    {SEMESTERS.map(item => (
+                                        <TouchableOpacity 
+                                            key={item.value} 
+                                            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#f8fafc' }}
+                                            onPress={() => handleUpdateSemester(item.value)}
+                                        >
+                                            <Text style={{ fontSize: 16, color: profile?.semester === item.value ? '#0055ff' : '#0f172a', fontWeight: profile?.semester === item.value ? '600' : '400' }}>
+                                                {item.label}
+                                            </Text>
+                                            {profile?.semester === item.value && <MaterialCommunityIcons name="check" size={20} color="#0055ff" />}
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                                <TouchableOpacity style={{ padding: 16, alignItems: 'center', backgroundColor: '#f8fafc' }} onPress={() => setShowSemesterPicker(false)}>
+                                    <Text style={{ color: '#64748b', fontWeight: '600' }}>Cancel</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </TouchableOpacity>
+                    </View>
+                )}
             </ScrollView>
         </View>
     );

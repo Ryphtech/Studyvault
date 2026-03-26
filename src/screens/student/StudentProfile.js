@@ -7,21 +7,23 @@ import { getUserProfile } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
-export default function StudentProfile({ navigation }) {
+export default function StudentProfile({ route, navigation }) {
+    const { targetUid, title } = route?.params || {};
     const { user, logout } = useContext(AuthContext);
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchProfile = async () => {
-            if (user?.uid) {
-                const data = await getUserProfile(user.uid);
+            const fetchUid = targetUid || user?.uid;
+            if (fetchUid) {
+                const data = await getUserProfile(fetchUid);
                 setProfile(data);
             }
             setLoading(false);
         };
         fetchProfile();
-    }, [user]);
+    }, [user, targetUid]);
 
     if (loading) {
         return (
@@ -59,11 +61,13 @@ export default function StudentProfile({ navigation }) {
                         <MaterialCommunityIcons name="arrow-left" size={24} color="#101318" />
                     </TouchableOpacity>
                 </View>
-                <Text style={styles.headerTitle}>My Profile</Text>
+                <Text style={styles.headerTitle}>{title || 'My Profile'}</Text>
                 <View style={{ width: 48, alignItems: 'flex-end' }}>
-                    <TouchableOpacity onPress={() => navigation.navigate('EditProfile')}>
-                        <Text style={styles.editButton}>Edit</Text>
-                    </TouchableOpacity>
+                    {!targetUid && (
+                        <TouchableOpacity onPress={() => navigation.navigate('EditProfile')}>
+                            <Text style={styles.editButton}>Edit</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
 
@@ -93,8 +97,8 @@ export default function StudentProfile({ navigation }) {
                     </View>
 
                     <View style={styles.nameSection}>
-                        <Text style={styles.nameText}>{profile?.name || "Student"}</Text>
-                        <Text style={styles.idText}>{user?.uid}</Text>
+                        <Text style={styles.nameText}>{profile?.name || "User"}</Text>
+                        <Text style={styles.idText}>{targetUid || user?.uid}</Text>
                         <View style={styles.deptBadge}>
                             <Text style={styles.deptText}>{profile?.department || "Department N/A"}</Text>
                         </View>
@@ -157,12 +161,15 @@ export default function StudentProfile({ navigation }) {
                 </View>
 
                 {/* Sign Out Button */}
-                <View style={styles.footer}>
-                    <TouchableOpacity style={styles.signOutButton} onPress={logout}>
-                        <MaterialCommunityIcons name="logout" size={20} color="#ef4444" />
-                        <Text style={styles.signOutText}>Sign Out</Text>
-                    </TouchableOpacity>
-                </View>
+                {/* Logout Button (only if my profile) */}
+                {!targetUid && (
+                    <View style={styles.footer}>
+                        <TouchableOpacity style={styles.signOutButton} onPress={logout}>
+                            <MaterialCommunityIcons name="logout" size={20} color="#ef4444" />
+                            <Text style={styles.signOutText}>Sign Out</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
 
                 <View style={{ height: 40 }} />
             </ScrollView>

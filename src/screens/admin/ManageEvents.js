@@ -1,63 +1,41 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, Image, ActivityIndicator } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { subscribeToEvents } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
-// Mock Data
-const initialEvents = [
-    {
-        id: 1,
-        title: 'Annual Science Fair',
-        date: '24',
-        month: 'OCT',
-        time: '10:00 AM - 4:00 PM',
-        location: 'Main Auditorium',
-        status: 'Upcoming',
-        image: 'https://images.unsplash.com/photo-1564981797816-1043664bf78d?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        statusColor: 'green'
-    },
-    {
-        id: 2,
-        title: 'Career Counseling',
-        date: '26',
-        month: 'OCT',
-        time: '2:00 PM - 5:00 PM',
-        location: 'Room 302, Library Block',
-        status: 'Draft',
-        image: 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        statusColor: 'yellow'
-    },
-    {
-        id: 3,
-        title: 'Morning Yoga',
-        date: '05',
-        month: 'NOV',
-        time: '7:00 AM - 8:30 AM',
-        location: 'Campus Ground',
-        status: 'Upcoming',
-        image: 'https://images.unsplash.com/photo-1544367563-12123d8965cd?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        statusColor: 'green'
-    },
-    {
-        id: 4,
-        title: 'Alumni Meetup',
-        date: '12',
-        month: 'SEP',
-        time: '6:00 PM - 9:00 PM',
-        location: 'College Banquet Hall',
-        status: 'Past',
-        image: 'https://images.unsplash.com/photo-1523580494863-6f3031224c94?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        statusColor: 'gray'
-    }
-];
+
 
 const filters = ['All', 'Upcoming', 'Past', 'Drafts'];
 
 export default function ManageEvents({ navigation }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedFilter, setSelectedFilter] = useState('All');
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToEvents((data) => {
+            if (data.length > 0) {
+                setEvents(data.map(d => ({
+                    ...d,
+                    statusColor: d.status === 'Upcoming' ? 'green' : (d.status === 'Past' ? 'gray' : 'yellow')
+                })));
+            } else {
+                setEvents([]);
+            }
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const filteredEvents = events.filter(e => {
+        const matchesSearch = e.title?.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesFilter = selectedFilter === 'All' || e.status === selectedFilter;
+        return matchesSearch && matchesFilter;
+    });
 
     const getStatusStyle = (color) => {
         switch (color) {
@@ -111,55 +89,61 @@ export default function ManageEvents({ navigation }) {
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                <View style={styles.eventList}>
-                    {initialEvents.map((event) => {
-                        const style = getStatusStyle(event.statusColor);
-                        return (
-                            <TouchableOpacity key={event.id} style={[styles.eventCard, event.status === 'Past' && { opacity: 0.8 }]}>
-                                {/* Thumbnail & Date */}
-                                <View style={styles.imageContainer}>
-                                    <Image source={{ uri: event.image }} style={styles.eventImage} />
-                                    <View style={styles.dateBadge}>
-                                        <Text style={styles.dateMonth}>{event.month}</Text>
-                                        <Text style={styles.dateDay}>{event.date}</Text>
-                                    </View>
-                                </View>
-
-                                {/* Content */}
-                                <View style={styles.cardContent}>
-                                    <View style={styles.cardHeader}>
-                                        <Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text>
-                                        <TouchableOpacity>
-                                            <MaterialCommunityIcons name="dots-vertical" size={20} color="#9ca3af" />
-                                        </TouchableOpacity>
-                                    </View>
-
-                                    <View style={styles.metaInfo}>
-                                        <View style={styles.metaRow}>
-                                            <MaterialCommunityIcons name="clock-outline" size={14} color="#6b7280" />
-                                            <Text style={styles.metaText}>{event.time}</Text>
-                                        </View>
-                                        <View style={styles.metaRow}>
-                                            <MaterialCommunityIcons name="map-marker-outline" size={14} color="#6b7280" />
-                                            <Text style={styles.metaText} numberOfLines={1}>{event.location}</Text>
+                {loading ? (
+                    <ActivityIndicator size="large" color="#0055ff" style={{ marginTop: 20 }} />
+                ) : filteredEvents.length === 0 ? (
+                    <Text style={{ textAlign: 'center', marginTop: 20, color: '#6b7280' }}>No events found.</Text>
+                ) : (
+                    <View style={styles.eventList}>
+                        {filteredEvents.map((event) => {
+                            const style = getStatusStyle(event.statusColor);
+                            return (
+                                <TouchableOpacity key={event.id} style={[styles.eventCard, event.status === 'Past' && { opacity: 0.8 }]}>
+                                    {/* Thumbnail & Date */}
+                                    <View style={styles.imageContainer}>
+                                        <Image source={{ uri: event.image }} style={styles.eventImage} />
+                                        <View style={styles.dateBadge}>
+                                            <Text style={styles.dateMonth}>{event.month || event.dateNum ? event.month : 'OCT'}</Text>
+                                            <Text style={styles.dateDay}>{event.dateNum || event.date || '01'}</Text>
                                         </View>
                                     </View>
 
-                                    <View style={[styles.statusTag, { backgroundColor: style.bg, borderColor: style.bg }]}>
-                                        <View style={[styles.statusDot, { backgroundColor: style.dot }]} />
-                                        <Text style={[styles.statusText, { color: style.text }]}>{event.status}</Text>
+                                    {/* Content */}
+                                    <View style={styles.cardContent}>
+                                        <View style={styles.cardHeader}>
+                                            <Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text>
+                                            <TouchableOpacity>
+                                                <MaterialCommunityIcons name="dots-vertical" size={20} color="#9ca3af" />
+                                            </TouchableOpacity>
+                                        </View>
+
+                                        <View style={styles.metaInfo}>
+                                            <View style={styles.metaRow}>
+                                                <MaterialCommunityIcons name="clock-outline" size={14} color="#6b7280" />
+                                                <Text style={styles.metaText}>{event.time}</Text>
+                                            </View>
+                                            <View style={styles.metaRow}>
+                                                <MaterialCommunityIcons name="map-marker-outline" size={14} color="#6b7280" />
+                                                <Text style={styles.metaText} numberOfLines={1}>{event.location}</Text>
+                                            </View>
+                                        </View>
+
+                                        <View style={[styles.statusTag, { backgroundColor: style.bg, borderColor: style.bg }]}>
+                                            <View style={[styles.statusDot, { backgroundColor: style.dot }]} />
+                                            <Text style={[styles.statusText, { color: style.text }]}>{event.status}</Text>
+                                        </View>
                                     </View>
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                )}
 
                 <View style={{ height: 100 }} />
             </ScrollView>
 
             {/* FAB */}
-            <TouchableOpacity style={styles.fab}>
+            <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('AddEvent')}>
                 <MaterialCommunityIcons name="plus" size={32} color="white" />
             </TouchableOpacity>
         </View>

@@ -17,8 +17,14 @@ import FilterStudents from '../screens/placement/FilterStudents';
 import Results from '../screens/placement/Results';
 
 import SettingsScreen from '../screens/common/SettingsScreen';
+import Notifications from '../screens/common/Notifications';
 
 import StudentProfile from '../screens/student/StudentProfile';
+import ChatList from '../screens/common/ChatList';
+import ChatRoom from '../screens/common/ChatRoom';
+import NewChat from '../screens/common/NewChat';
+import NotificationDetail from '../screens/common/NotificationDetail';
+import SubmitFeedback from '../screens/student/SubmitFeedback';
 
 const Stack = createStackNavigator();
 
@@ -31,7 +37,13 @@ export default function PlacementNavigator() {
             <Stack.Screen name="FilterStudents" component={FilterStudents} />
             <Stack.Screen name="Results" component={Results} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="Notifications" component={Notifications} />
             <Stack.Screen name="Profile" component={StudentProfile} />
+            <Stack.Screen name="ChatList" component={ChatList} />
+            <Stack.Screen name="ChatRoom" component={ChatRoom} />
+            <Stack.Screen name="NewChat" component={NewChat} />
+            <Stack.Screen name="NotificationDetail" component={NotificationDetail} />
+            <Stack.Screen name="SubmitFeedback" component={SubmitFeedback} />
         </Stack.Navigator>
     );
 }

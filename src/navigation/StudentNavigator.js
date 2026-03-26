@@ -13,7 +13,18 @@ import PlacementsScreen from '../screens/student/Placements';
 import ApplyDrive from '../screens/student/ApplyDrive';
 import EditProfile from '../screens/student/EditProfile';
 import DriveResults from '../screens/student/DriveResults';
+import EventDetails from '../screens/student/EventDetails';
+import SubmitFeedback from '../screens/student/SubmitFeedback';
+import FeedbackSuccess from '../screens/student/FeedbackSuccess';
+import Notifications from '../screens/common/Notifications';
 import SettingsScreen from '../screens/common/SettingsScreen';
+import PerformanceAnalytics from '../screens/student/PerformanceAnalytics';
+import EventRegistration from '../screens/student/EventRegistration';
+import NotificationDetail from '../screens/common/NotificationDetail';
+import NotesScreen from '../screens/student/Notes';
+import ChatList from '../screens/common/ChatList';
+import ChatRoom from '../screens/common/ChatRoom';
+import NewChat from '../screens/common/NewChat';
 
 // Placeholders for other student screens
 const PlaceholderScreen = ({ route }) => (
@@ -53,6 +64,8 @@ function StudentTabNavigator() {
                         iconName = focused ? 'calendar' : 'calendar-outline';
                     } else if (route.name === 'Settings') {
                         iconName = focused ? 'cog' : 'cog-outline';
+                    } else if (route.name === 'Chat') {
+                        iconName = focused ? 'chat-processing' : 'chat-processing-outline';
                     }
 
                     return <MaterialCommunityIcons name={iconName} size={size} color={color} />;
@@ -63,6 +76,7 @@ function StudentTabNavigator() {
             <Tab.Screen name="Attendance" component={AttendanceScreen} />
             <Tab.Screen name="Jobs" component={PlacementsScreen} />
             <Tab.Screen name="Events" component={EventsScreen} />
+            <Tab.Screen name="Chat" component={ChatList} />
             <Tab.Screen name="Settings" component={SettingsScreen} />
         </Tab.Navigator>
     );
@@ -76,10 +90,20 @@ export default function StudentNavigator() {
             {/* Screens that should hide the tab bar or be pushed on top */}
             <Stack.Screen name="Profile" component={StudentProfile} />
             <Stack.Screen name="Marks" component={MarksScreen} />
-            <Stack.Screen name="Notes" component={PlaceholderScreen} />
+            <Stack.Screen name="Notes" component={NotesScreen} />
             <Stack.Screen name="ApplyDrive" component={ApplyDrive} />
             <Stack.Screen name="EditProfile" component={EditProfile} />
             <Stack.Screen name="DriveResults" component={DriveResults} />
+            <Stack.Screen name="EventDetails" component={EventDetails} />
+            <Stack.Screen name="SubmitFeedback" component={SubmitFeedback} />
+            <Stack.Screen name="FeedbackSuccess" component={FeedbackSuccess} />
+            <Stack.Screen name="Notifications" component={Notifications} />
+            <Stack.Screen name="NotificationDetail" component={NotificationDetail} />
+            <Stack.Screen name="PerformanceAnalytics" component={PerformanceAnalytics} />
+            <Stack.Screen name="EventRegistration" component={EventRegistration} />
+            <Stack.Screen name="ChatList" component={ChatList} />
+            <Stack.Screen name="ChatRoom" component={ChatRoom} />
+            <Stack.Screen name="NewChat" component={NewChat} />
 
             {/* Note: If Placements/Events/Settings need detail screens, add them here */}
         </Stack.Navigator>

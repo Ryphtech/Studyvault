@@ -3,13 +3,24 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl }
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { AuthContext } from '../../context/AuthContext';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import { subscribeToActiveDrives, subscribeToPlacedStudents } from '../../services/firestoreService';
+import { subscribeToActiveDrives, subscribeToPlacedStudents, getUserProfile } from '../../services/firestoreService';
 
 export default function PlacementDashboard({ navigation }) {
-    const { logout } = useContext(AuthContext);
+    const { user, logout } = useContext(AuthContext);
     const [drives, setDrives] = useState([]);
     const [placedStudents, setPlacedStudents] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [officerName, setOfficerName] = useState('Officer');
+
+    useEffect(() => {
+        const loadName = async () => {
+            if (user?.uid) {
+                const profile = await getUserProfile(user.uid);
+                if (profile?.name) setOfficerName(profile.name.split(' ')[0]);
+            }
+        };
+        loadName();
+    }, [user]);
 
     useEffect(() => {
         let unsubscribeDrives = () => { };
@@ -60,11 +71,14 @@ export default function PlacementDashboard({ navigation }) {
                     </TouchableOpacity>
                     <View>
                         <Text style={styles.headerTitle}>Dashboard</Text>
-                        <Text style={styles.headerSubtitle}>Welcome back, Officer</Text>
+                        <Text style={styles.headerSubtitle}>Welcome back, {officerName}</Text>
                     </View>
                 </View>
                 <View style={styles.headerRight}>
-                    <TouchableOpacity style={styles.iconButton}>
+                    <TouchableOpacity
+                        style={styles.iconButton}
+                        onPress={() => navigation.navigate('Notifications')}
+                    >
                         <MaterialIcons name="notifications" size={26} color="#4b5563" />
                         <View style={styles.notificationDot} />
                     </TouchableOpacity>
@@ -128,6 +142,13 @@ export default function PlacementDashboard({ navigation }) {
                                 <MaterialIcons name="filter-list" size={28} color="#ea580c" />
                             </View>
                             <Text style={styles.actionText}>Eligibility Filter</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('ChatList')}>
+                            <View style={[styles.actionIconBox, { backgroundColor: '#f0fdf4' }]}>
+                                <MaterialIcons name="chat" size={28} color="#16a34a" />
+                            </View>
+                            <Text style={styles.actionText}>Messages</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -202,53 +223,11 @@ export default function PlacementDashboard({ navigation }) {
                                 </View>
                             </TouchableOpacity>
                         )) : (
-                            /* Fallback to Mock Data if no real drives */
-                            <TouchableOpacity style={styles.driveCard}>
-                                <View style={styles.driveCardHeader}>
-                                    <View style={styles.driveCompanyInfo}>
-                                        <View style={styles.driveCompanyIconBox}>
-                                            <MaterialIcons name="apartment" size={26} color="#4b5563" />
-                                        </View>
-                                        <View>
-                                            <Text style={styles.driveCompanyName}>TechCorp Solutions</Text>
-                                            <Text style={styles.driveRoleInfo}>Software Engineer • ₹12 LPA</Text>
-                                        </View>
-                                    </View>
-                                    <View style={[styles.driveTypeBadge, { backgroundColor: '#eff6ff', borderColor: 'rgba(37,99,235,0.1)' }]}>
-                                        <Text style={[styles.driveTypeText, { color: '#1d4ed8' }]}>On Campus</Text>
-                                    </View>
-                                </View>
-                                <View style={styles.driveDetailsGrid}>
-                                    <View style={styles.driveDetailItem}>
-                                        <MaterialIcons name="calendar-month" size={18} color="#9ca3af" />
-                                        <View>
-                                            <Text style={styles.detailLabel}>DATE</Text>
-                                            <Text style={styles.detailValue}>Oct 28, 2023</Text>
-                                        </View>
-                                    </View>
-                                    <View style={styles.driveDetailItem}>
-                                        <MaterialIcons name="school" size={18} color="#9ca3af" />
-                                        <View>
-                                            <Text style={styles.detailLabel}>ELIGIBILITY</Text>
-                                            <Text style={styles.detailValue}>CGPA {'>'} 7.5</Text>
-                                        </View>
-                                    </View>
-                                </View>
-                                <View style={styles.driveFooter}>
-                                    <View style={styles.avatarPile}>
-                                        <Image source={{ uri: 'https://randomuser.me/api/portraits/women/44.jpg' }} style={styles.pileAvatar1} />
-                                        <Image source={{ uri: 'https://randomuser.me/api/portraits/men/32.jpg' }} style={styles.pileAvatar2} />
-                                        <Image source={{ uri: 'https://randomuser.me/api/portraits/women/68.jpg' }} style={styles.pileAvatar3} />
-                                        <View style={styles.pileCounterBox}>
-                                            <Text style={styles.pileCounterText}>+42</Text>
-                                        </View>
-                                    </View>
-                                    <TouchableOpacity style={styles.manageButton} onPress={() => navigation.navigate('ManageDriveResults', { driveId: 'mock-id' })}>
-                                        <Text style={styles.manageButtonText}>Manage Results</Text>
-                                        <MaterialIcons name="arrow-forward" size={16} color="#0055ff" />
-                                    </TouchableOpacity>
-                                </View>
-                            </TouchableOpacity>
+                            <View style={{ alignItems: 'center', padding: 24 }}>
+                                <MaterialIcons name="work-outline" size={48} color="#cbd5e1" />
+                                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#94a3b8', marginTop: 12 }}>No Active Drives</Text>
+                                <Text style={{ fontSize: 13, color: '#94a3b8', marginTop: 4 }}>New drives will appear here</Text>
+                            </View>
                         )}
                     </View>
                 </View>
@@ -283,30 +262,10 @@ export default function PlacementDashboard({ navigation }) {
                                     {index < placedStudents.length - 1 && <View style={styles.divider} />}
                                 </View>
                             )) : (
-                                /* Fallback mock data */
-                                <>
-                                    <View style={styles.studentRow}>
-                                        <View style={styles.studentInfo}>
-                                            <Image source={{ uri: 'https://randomuser.me/api/portraits/women/65.jpg' }} style={styles.studentAvatar} />
-                                            <View>
-                                                <Text style={styles.studentName}>Sarah Khan</Text>
-                                                <Text style={styles.placementInfo}>Placed at Google</Text>
-                                            </View>
-                                        </View>
-                                        <Text style={styles.packageText}>₹24 LPA</Text>
-                                    </View>
-                                    <View style={styles.divider} />
-                                    <View style={styles.studentRow}>
-                                        <View style={styles.studentInfo}>
-                                            <Image source={{ uri: 'https://randomuser.me/api/portraits/men/46.jpg' }} style={styles.studentAvatar} />
-                                            <View>
-                                                <Text style={styles.studentName}>Rahul Mehta</Text>
-                                                <Text style={styles.placementInfo}>Placed at Amazon</Text>
-                                            </View>
-                                        </View>
-                                        <Text style={styles.packageText}>₹18 LPA</Text>
-                                    </View>
-                                </>
+                                <View style={{ alignItems: 'center', padding: 24 }}>
+                                    <MaterialIcons name="people-outline" size={48} color="#cbd5e1" />
+                                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#94a3b8', marginTop: 12 }}>No Students Placed</Text>
+                                </View>
                             )}
                         </View>
 

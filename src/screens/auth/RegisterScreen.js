@@ -4,6 +4,7 @@ import { Text, ActivityIndicator, IconButton } from 'react-native-paper';
 import { AuthContext } from '../../context/AuthContext';
 import { setDoc, doc } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
+import { validateRoleCode } from '../../services/firestoreService';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -12,11 +13,13 @@ const { width } = Dimensions.get('window');
 const ROLES = [
     { label: 'Student', value: 'student' },
     { label: 'Faculty', value: 'faculty' },
+    { label: 'Head of Department', value: 'hod' },
     { label: 'Admin', value: 'admin' },
     { label: 'Placement Officer', value: 'placement_officer' },
 ];
 
 export default function RegisterScreen({ navigation }) {
+    const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -25,11 +28,16 @@ export default function RegisterScreen({ navigation }) {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [showRolePicker, setShowRolePicker] = useState(false);
+    const [securityCode, setSecurityCode] = useState('');
+    const [semester, setSemester] = useState('');
+    const [showSemesterPicker, setShowSemesterPicker] = useState(false);
+
+    const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8].map(s => ({ label: `Semester ${s}`, value: s.toString() }));
 
     const { register } = useContext(AuthContext);
 
     const handleRegister = async () => {
-        if (!email || !password || !confirmPassword || !role) {
+        if (!name.trim() || !email || !password || !confirmPassword || !role) {
             alert('Please fill in all fields and select a role.');
             return;
         }
@@ -37,22 +45,45 @@ export default function RegisterScreen({ navigation }) {
             alert('Passwords do not match.');
             return;
         }
+        if (role !== 'admin' && !securityCode.trim()) {
+            alert('Please enter the security code provided by your admin.');
+            return;
+        }
+        if (role === 'student' && !semester) {
+            alert('Please select your current semester.');
+            return;
+        }
 
         setLoading(true);
         try {
+            // Validate security code against Firestore (skip for admin)
+            let validation = { valid: true };
+            if (role !== 'admin') {
+                validation = await validateRoleCode(role, securityCode.trim().toUpperCase());
+                if (!validation.valid) {
+                    alert(validation.message);
+                    setLoading(false);
+                    return;
+                }
+            }
+
             const userCredential = await register(email, password);
             const user = userCredential.user;
-            // Create user document with role
-            // Using email username as default name since name field was removed from UI per design
             const defaultName = email.split('@')[0];
-            await setDoc(doc(db, "users", user.uid), {
-                name: defaultName,
+            const userData = {
+                name: name.trim(),
                 email,
                 role,
                 createdAt: new Date().toISOString()
-            });
-            // Auto navigate via AuthContext usually, but if not:
-            // navigation.navigate('RoleBasedNavigator'); 
+            };
+            // If the code carried a department (e.g. HOD codes), save it to the profile
+            if (validation.department) {
+                userData.department = validation.department;
+            }
+            if (role === 'student') {
+                userData.semester = parseInt(semester);
+            }
+            await setDoc(doc(db, "users", user.uid), userData);
         } catch (error) {
             console.error(error);
             alert("Registration failed: " + error.message);
@@ -74,9 +105,22 @@ export default function RegisterScreen({ navigation }) {
         </TouchableOpacity>
     );
 
+    const renderSemesterItem = ({ item }) => (
+        <TouchableOpacity
+            style={styles.modalItem}
+            onPress={() => {
+                setSemester(item.value);
+                setShowSemesterPicker(false);
+            }}
+        >
+            <Text style={[styles.modalItemText, semester === item.value && styles.selectedModalItemText]}>{item.label}</Text>
+            {semester === item.value && <MaterialCommunityIcons name="check" size={20} color="#0055ff" />}
+        </TouchableOpacity>
+    );
+
     return (
-        <ScrollView style={styles.container} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+            <ScrollView style={styles.container} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
 
                 {/* Top Bar */}
                 <View style={styles.topBar}>
@@ -127,6 +171,55 @@ export default function RegisterScreen({ navigation }) {
                             </Text>
                             <MaterialCommunityIcons name="chevron-down" size={20} color="#5e6d8d" />
                         </TouchableOpacity>
+                    </View>
+
+                    {/* Security Code (not needed for admin) */}
+                    {role && role !== 'admin' ? (
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Security Code</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialCommunityIcons name="shield-key-outline" size={20} color="#d97706" style={styles.inputIcon} />
+                                <TextInput
+                                    style={[styles.input, { letterSpacing: 2, fontWeight: '700' }]}
+                                    placeholder="Enter code from admin"
+                                    placeholderTextColor="#9aa2b1"
+                                    value={securityCode}
+                                    onChangeText={setSecurityCode}
+                                    autoCapitalize="characters"
+                                    maxLength={10}
+                                />
+                            </View>
+                            <Text style={{ fontSize: 11, color: '#94a3b8', marginLeft: 4, marginTop: 2 }}>Ask your admin for the registration code</Text>
+                        </View>
+                    ) : null}
+
+                    {/* Semester Selector for Students */}
+                    {role === 'student' && (
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Select Semester</Text>
+                            <TouchableOpacity style={styles.inputWrapper} onPress={() => setShowSemesterPicker(true)}>
+                                <MaterialCommunityIcons name="calendar-month" size={20} color="#5e6d8d" style={styles.inputIcon} />
+                                <Text style={[styles.inputText, !semester && styles.placeholderText]}>
+                                    {semester ? `Semester ${semester}` : 'Choose your semester'}
+                                </Text>
+                                <MaterialCommunityIcons name="chevron-down" size={20} color="#5e6d8d" />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {/* Full Name */}
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Full Name</Text>
+                        <View style={styles.inputWrapper}>
+                            <MaterialCommunityIcons name="account-outline" size={20} color="#5e6d8d" style={styles.inputIcon} />
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Enter your full name"
+                                placeholderTextColor="#9aa2b1"
+                                value={name}
+                                onChangeText={setName}
+                            />
+                        </View>
                     </View>
 
                     {/* Email */}
@@ -228,8 +321,22 @@ export default function RegisterScreen({ navigation }) {
                     </TouchableOpacity>
                 </Modal>
 
-            </KeyboardAvoidingView>
-        </ScrollView>
+                {/* Semester Picker Modal */}
+                <Modal visible={showSemesterPicker} transparent animationType="fade">
+                    <TouchableOpacity style={styles.modalOverlay} onPress={() => setShowSemesterPicker(false)} activeOpacity={1}>
+                        <View style={[styles.modalContent, { maxHeight: Dimensions.get('window').height * 0.6 }]}>
+                            <Text style={styles.modalTitle}>Select Semester</Text>
+                            <FlatList
+                                data={SEMESTERS}
+                                renderItem={renderSemesterItem}
+                                keyExtractor={item => item.value}
+                            />
+                        </View>
+                    </TouchableOpacity>
+                </Modal>
+
+            </ScrollView>
+        </KeyboardAvoidingView>
     );
 }
 

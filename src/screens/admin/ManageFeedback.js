@@ -1,59 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { subscribeToFeedbackSurveys } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
-// Mock Data
-const initialSurveys = [
-    {
-        id: 1,
-        title: 'Course Evaluation: CS101',
-        date: 'Created on Oct 24, 2023',
-        responses: '45',
-        questions: '12',
-        status: 'Active',
-        icon: 'school',
-        color: 'blue'
-    },
-    {
-        id: 2,
-        title: 'Canteen Feedback Survey',
-        date: 'Created on Oct 20, 2023',
-        responses: '128',
-        questions: '8',
-        status: 'Active',
-        icon: 'food-fork-drink',
-        color: 'purple'
-    },
-    {
-        id: 3,
-        title: 'Library Services Audit',
-        date: 'Last edited 2 days ago',
-        responses: '-',
-        questions: '15',
-        status: 'Draft',
-        icon: 'bookshelf',
-        color: 'orange'
-    },
-    {
-        id: 4,
-        title: 'Annual Sports Day Feedback',
-        date: 'Closed on Sep 15, 2023',
-        responses: '342',
-        questions: '5',
-        status: 'Closed',
-        icon: 'trophy',
-        color: 'gray'
-    }
-];
+
 
 const filters = ['All', 'Active', 'Closed', 'Drafts'];
 
 export default function ManageFeedback({ navigation }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedFilter, setSelectedFilter] = useState('All');
+    const [surveys, setSurveys] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToFeedbackSurveys((data) => {
+            setSurveys(data);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const filteredSurveys = surveys.filter(s => {
+        const matchesSearch = s.title?.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesFilter = selectedFilter === 'All' || s.status === selectedFilter;
+        return matchesSearch && matchesFilter;
+    });
 
     const getStatusStyle = (status) => {
         switch (status) {
@@ -117,64 +92,74 @@ export default function ManageFeedback({ navigation }) {
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                <View style={styles.surveyList}>
-                    {initialSurveys.map((survey) => {
-                        const style = getStatusStyle(survey.status);
-                        const iconStyle = getIconStyle(survey.color);
-                        return (
-                            <TouchableOpacity key={survey.id} style={[styles.surveyCard, survey.status === 'Closed' && { opacity: 0.8 }]}>
-                                {/* Header */}
-                                <View style={styles.cardHeader}>
-                                    <View style={styles.headerLeft}>
-                                        <View style={[styles.iconBox, { backgroundColor: iconStyle.bg }]}>
-                                            <MaterialCommunityIcons name={survey.icon} size={24} color={iconStyle.text} />
+                {loading ? (
+                    <Text style={{ textAlign: 'center', marginTop: 40, color: '#6b7280' }}>Loading surveys...</Text>
+                ) : filteredSurveys.length === 0 ? (
+                    <View style={{ alignItems: 'center', marginTop: 60 }}>
+                        <MaterialCommunityIcons name="clipboard-text-off-outline" size={48} color="#9ca3af" />
+                        <Text style={{ fontSize: 16, color: '#6b7280', marginTop: 16 }}>No surveys found.</Text>
+                        <Text style={{ fontSize: 14, color: '#9ca3af', marginTop: 4 }}>Add data to see live surveys here.</Text>
+                    </View>
+                ) : (
+                    <View style={styles.surveyList}>
+                        {filteredSurveys.map((survey) => {
+                            const style = getStatusStyle(survey.status);
+                            const iconStyle = getIconStyle(survey.color);
+                            return (
+                                <TouchableOpacity key={survey.id} style={[styles.surveyCard, survey.status === 'Closed' && { opacity: 0.8 }]}>
+                                    {/* Header */}
+                                    <View style={styles.cardHeader}>
+                                        <View style={styles.headerLeft}>
+                                            <View style={[styles.iconBox, { backgroundColor: iconStyle.bg }]}>
+                                                <MaterialCommunityIcons name={survey.icon} size={24} color={iconStyle.text} />
+                                            </View>
+                                            <View>
+                                                <Text style={styles.surveyTitle}>{survey.title}</Text>
+                                                <Text style={styles.surveyDate}>{survey.date}</Text>
+                                            </View>
                                         </View>
-                                        <View>
-                                            <Text style={styles.surveyTitle}>{survey.title}</Text>
-                                            <Text style={styles.surveyDate}>{survey.date}</Text>
+                                        <TouchableOpacity>
+                                            <MaterialCommunityIcons name="dots-vertical" size={20} color="#9ca3af" />
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {/* Stats */}
+                                    <View style={styles.statsRow}>
+                                        <View style={styles.statItem}>
+                                            <MaterialCommunityIcons name="account-group" size={18} color="#9ca3af" />
+                                            <Text style={styles.statValue}>{survey.responses}</Text>
+                                            <Text style={styles.statLabel}>Responses</Text>
+                                        </View>
+                                        <View style={styles.statItem}>
+                                            <MaterialCommunityIcons name="help-circle-outline" size={18} color="#9ca3af" />
+                                            <Text style={styles.statValue}>{survey.questions}</Text>
+                                            <Text style={styles.statLabel}>Questions</Text>
                                         </View>
                                     </View>
-                                    <TouchableOpacity>
-                                        <MaterialCommunityIcons name="dots-vertical" size={20} color="#9ca3af" />
-                                    </TouchableOpacity>
-                                </View>
 
-                                {/* Stats */}
-                                <View style={styles.statsRow}>
-                                    <View style={styles.statItem}>
-                                        <MaterialCommunityIcons name="account-group" size={18} color="#9ca3af" />
-                                        <Text style={styles.statValue}>{survey.responses}</Text>
-                                        <Text style={styles.statLabel}>Responses</Text>
-                                    </View>
-                                    <View style={styles.statItem}>
-                                        <MaterialCommunityIcons name="help-circle-outline" size={18} color="#9ca3af" />
-                                        <Text style={styles.statValue}>{survey.questions}</Text>
-                                        <Text style={styles.statLabel}>Questions</Text>
-                                    </View>
-                                </View>
+                                    {/* Footer */}
+                                    <View style={styles.cardFooter}>
+                                        <View style={[styles.statusTag, { backgroundColor: style.bg, borderColor: style.bg }]}>
+                                            <View style={[styles.statusDot, { backgroundColor: style.dot }]} />
+                                            <Text style={[styles.statusText, { color: style.text }]}>{survey.status}</Text>
+                                        </View>
 
-                                {/* Footer */}
-                                <View style={styles.cardFooter}>
-                                    <View style={[styles.statusTag, { backgroundColor: style.bg, borderColor: style.bg }]}>
-                                        <View style={[styles.statusDot, { backgroundColor: style.dot }]} />
-                                        <Text style={[styles.statusText, { color: style.text }]}>{survey.status}</Text>
+                                        <TouchableOpacity style={styles.actionButton}>
+                                            <Text style={[styles.actionText, survey.status === 'Draft' ? { color: '#6b7280' } : { color: '#0055ff' }]}>
+                                                {survey.status === 'Draft' ? 'Edit Form' : survey.status === 'Closed' ? 'View Report' : 'View Results'}
+                                            </Text>
+                                            <MaterialCommunityIcons
+                                                name={survey.status === 'Draft' ? 'pencil' : survey.status === 'Closed' ? 'chart-bar' : 'arrow-right'}
+                                                size={16}
+                                                color={survey.status === 'Draft' ? '#6b7280' : '#0055ff'}
+                                            />
+                                        </TouchableOpacity>
                                     </View>
-
-                                    <TouchableOpacity style={styles.actionButton}>
-                                        <Text style={[styles.actionText, survey.status === 'Draft' ? { color: '#6b7280' } : { color: '#0055ff' }]}>
-                                            {survey.status === 'Draft' ? 'Edit Form' : survey.status === 'Closed' ? 'View Report' : 'View Results'}
-                                        </Text>
-                                        <MaterialCommunityIcons
-                                            name={survey.status === 'Draft' ? 'pencil' : survey.status === 'Closed' ? 'chart-bar' : 'arrow-right'}
-                                            size={16}
-                                            color={survey.status === 'Draft' ? '#6b7280' : '#0055ff'}
-                                        />
-                                    </TouchableOpacity>
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                )}
 
                 <View style={{ height: 100 }} />
             </ScrollView>

@@ -6,7 +6,6 @@ import { subscribeToUsersByRole } from '../../services/firestoreService';
 
 const { width } = Dimensions.get('window');
 
-// Mock Data for filters
 const departments = ['CSE', 'ECE', 'MECH', 'IT', 'CIVIL', 'Computer Science'];
 const initialSkills = [];
 

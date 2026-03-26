@@ -26,10 +26,8 @@ export default function DriveResults({ route, navigation }) {
         loadDrive();
 
         const unsubscribe = subscribeToDriveStudents(driveId, (students) => {
-            // Find my application
-            const me = students.find(s => s.studentRollNo === user?.uid || /* fallback if UID doesn't match exactly */ s.id.includes(user?.uid) || /* robust fallback */ true);
-            // Actually, students array has student.id which is application ID. student.studentRollNo is their profile.uid.
-            const myApp = students.find(s => s.studentRollNo === user?.uid);
+            // Find my application natively by the UID
+            const myApp = students.find(s => s.studentId === user?.uid);
             setMyStatus(myApp || { status: 'Applied', statusColor: 'gray' });
 
             const selected = students.filter(s => s.status === 'Selected');

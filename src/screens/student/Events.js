@@ -97,49 +97,54 @@ export default function EventsScreen({ navigation }) {
 
                 {/* Featured Event Hero Card */}
                 {featuredEvent && (
-                    <LinearGradient
-                        colors={['#0055ff', '#0033cc']}
-                        style={styles.heroCard}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                    >
-                        <View style={styles.heroDecoration} />
+                    <TouchableOpacity activeOpacity={0.9} onPress={() => navigation.navigate('EventDetails', { event: featuredEvent })}>
+                        <LinearGradient
+                            colors={['#0055ff', '#0033cc']}
+                            style={styles.heroCard}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                            <View style={styles.heroDecoration} />
 
-                        <View style={styles.heroTop}>
-                            <View style={styles.heroContent}>
-                                <View style={styles.featuredBadge}>
-                                    <MaterialCommunityIcons name="lightning-bolt" size={12} color="#fde047" />
-                                    <Text style={styles.featuredText}>FEATURED</Text>
+                            <View style={styles.heroTop}>
+                                <View style={styles.heroContent}>
+                                    <View style={styles.featuredBadge}>
+                                        <MaterialCommunityIcons name="lightning-bolt" size={12} color="#fde047" />
+                                        <Text style={styles.featuredText}>FEATURED</Text>
+                                    </View>
+                                    <Text style={styles.heroTitle}>{featuredEvent.title}</Text>
+                                    <Text style={styles.heroSubtitle}>{featuredEvent.date} • {featuredEvent.location}</Text>
                                 </View>
-                                <Text style={styles.heroTitle}>{featuredEvent.title}</Text>
-                                <Text style={styles.heroSubtitle}>{featuredEvent.date} • {featuredEvent.location}</Text>
+
+                                <View style={styles.dateBadgeLarge}>
+                                    <Text style={styles.dateBadgeMonth}>{getMonthAndDay(featuredEvent.date).month}</Text>
+                                    <Text style={styles.dateBadgeDay}>{getMonthAndDay(featuredEvent.date).day}</Text>
+                                </View>
                             </View>
 
-                            <View style={styles.dateBadgeLarge}>
-                                <Text style={styles.dateBadgeMonth}>{getMonthAndDay(featuredEvent.date).month}</Text>
-                                <Text style={styles.dateBadgeDay}>{getMonthAndDay(featuredEvent.date).day}</Text>
+                            <View style={styles.heroGrid}>
+                                <View style={styles.heroGridItem}>
+                                    <Text style={styles.gridLabel}>EVENTS</Text>
+                                    <Text style={styles.gridValue}>{featuredEvent.stats?.events || '5+'}</Text>
+                                </View>
+                                <View style={styles.heroGridItem}>
+                                    <Text style={styles.gridLabel}>WORKSHOPS</Text>
+                                    <Text style={styles.gridValue}>{featuredEvent.stats?.workshops || '2'}</Text>
+                                </View>
+                                <View style={styles.heroGridItem}>
+                                    <Text style={styles.gridLabel}>ENTRY</Text>
+                                    <Text style={styles.gridValue}>{featuredEvent.stats?.entry || 'Free'}</Text>
+                                </View>
                             </View>
-                        </View>
 
-                        <View style={styles.heroGrid}>
-                            <View style={styles.heroGridItem}>
-                                <Text style={styles.gridLabel}>EVENTS</Text>
-                                <Text style={styles.gridValue}>{featuredEvent.stats?.events || '5+'}</Text>
-                            </View>
-                            <View style={styles.heroGridItem}>
-                                <Text style={styles.gridLabel}>WORKSHOPS</Text>
-                                <Text style={styles.gridValue}>{featuredEvent.stats?.workshops || '2'}</Text>
-                            </View>
-                            <View style={styles.heroGridItem}>
-                                <Text style={styles.gridLabel}>ENTRY</Text>
-                                <Text style={styles.gridValue}>{featuredEvent.stats?.entry || 'Free'}</Text>
-                            </View>
-                        </View>
-
-                        <TouchableOpacity style={styles.registerButton}>
-                            <Text style={styles.registerButtonText}>Register Now</Text>
-                        </TouchableOpacity>
-                    </LinearGradient>
+                            <TouchableOpacity
+                                style={styles.registerButton}
+                                onPress={() => navigation.navigate('EventDetails', { event: featuredEvent })}
+                            >
+                                <Text style={styles.registerButtonText}>Register Now</Text>
+                            </TouchableOpacity>
+                        </LinearGradient>
+                    </TouchableOpacity>
                 )}
 
                 {/* Upcoming Events List */}
@@ -155,7 +160,11 @@ export default function EventsScreen({ navigation }) {
                     {events.map((item, index) => {
                         const iconData = getEventIcon(item.type);
                         return (
-                            <TouchableOpacity key={item.id || index} style={[styles.eventCard, item.isRegistered && { opacity: 0.95 }]}>
+                            <TouchableOpacity
+                                key={item.id || index}
+                                style={[styles.eventCard, item.isRegistered && { opacity: 0.95 }]}
+                                onPress={() => navigation.navigate('EventDetails', { event: item })}
+                            >
                                 {item.isRegistered && (
                                     <View style={styles.registeredCheck}>
                                         <MaterialCommunityIcons name="check" size={14} color="white" />

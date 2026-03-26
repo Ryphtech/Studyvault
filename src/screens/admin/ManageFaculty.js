@@ -7,12 +7,14 @@ const { width } = Dimensions.get('window');
 
 const filters = ['All Departments', 'Comp. Science', 'Mathematics', 'Physics', 'General'];
 
-import { subscribeToUsersByRole } from '../../services/firestoreService';
+import { subscribeToUsersByRole, deleteUserProfile } from '../../services/firestoreService';
 import { ActivityIndicator } from 'react-native-paper';
+import { Alert } from 'react-native';
 
-export default function ManageFaculty({ navigation }) {
+export default function ManageFaculty({ navigation, route }) {
+    const departmentParam = route?.params?.department;
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedFilter, setSelectedFilter] = useState('All Departments');
+    const [selectedFilter, setSelectedFilter] = useState(departmentParam || 'All Departments');
     const [facultyList, setFacultyList] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -42,6 +44,26 @@ export default function ManageFaculty({ navigation }) {
         return matchesSearch && matchesFilter;
     });
 
+    const handleDelete = (uid, name) => {
+        Alert.alert(
+            "Delete Faculty",
+            `Are you sure you want to delete ${name}? This action cannot be undone.`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        const success = await deleteUserProfile(uid);
+                        if (!success) {
+                            Alert.alert("Error", "Failed to delete from database.");
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     return (
         <View style={styles.container}>
             {/* Top Navigation Bar */}
@@ -52,7 +74,7 @@ export default function ManageFaculty({ navigation }) {
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Manage Faculty</Text>
                 </View>
-                <TouchableOpacity style={styles.addButton}>
+                <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('AddFaculty')}>
                     <MaterialIcons name="person-add" size={20} color="white" />
                 </TouchableOpacity>
             </View>
@@ -141,15 +163,24 @@ export default function ManageFaculty({ navigation }) {
 
                                     {/* Actions Footer */}
                                     <View style={styles.actionsFooter}>
-                                        <TouchableOpacity style={styles.actionButton}>
+                                        <TouchableOpacity
+                                            style={styles.actionButton}
+                                            onPress={() => navigation.navigate('Profile', { targetUid: faculty.uid, title: 'Faculty Profile' })}
+                                        >
                                             <MaterialIcons name="visibility" size={20} color="#94a3b8" />
                                             <Text style={styles.actionText}>View</Text>
                                         </TouchableOpacity>
-                                        <TouchableOpacity style={styles.actionButton}>
-                                            <MaterialIcons name="edit" size={20} color="#94a3b8" />
-                                            <Text style={styles.actionText}>Edit</Text>
+                                        <TouchableOpacity
+                                            style={styles.actionButton}
+                                            onPress={() => navigation.navigate('AssignFacultySubject', { faculty })}
+                                        >
+                                            <MaterialIcons name="assignment" size={20} color="#0055ff" />
+                                            <Text style={[styles.actionText, { color: '#0055ff', fontWeight: '600' }]}>Assign</Text>
                                         </TouchableOpacity>
-                                        <TouchableOpacity style={styles.actionButtonDelete}>
+                                        <TouchableOpacity
+                                            style={styles.actionButtonDelete}
+                                            onPress={() => handleDelete(faculty.uid, faculty.name)}
+                                        >
                                             <MaterialIcons name="delete" size={20} color="#94a3b8" />
                                             <Text style={styles.actionTextDelete}>Delete</Text>
                                         </TouchableOpacity>
