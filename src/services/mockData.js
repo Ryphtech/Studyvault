@@ -84,7 +84,7 @@ export const MARKS = [
     {
         studentId: "student_demo",
         subjectId: "DA-201",
-        subjectName: "Data Analytics",
+        subjectName: "Data Analytcs",
         credits: 3,
         cia1: 18,
         cia2: 16,
