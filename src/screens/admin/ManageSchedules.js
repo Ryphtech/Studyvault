@@ -4,9 +4,8 @@ import { Text, ActivityIndicator } from 'react-native-paper';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '../../context/AuthContext';
-import { getUserProfile } from '../../services/firestoreService';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { db } from '../../services/firebaseConfig';
+import { getUserProfile, getAllCurriculumSubjects, subscribeToDepartmentCourses } from '../../services/supabaseService';
+import { supabase } from '../../services/supabaseClient';
 
 const { width } = Dimensions.get('window');
 
@@ -40,11 +39,14 @@ export default function ManageSchedules({ navigation, route }) {
     const [editingPeriod, setEditingPeriod] = useState(null);
     const [formData, setFormData] = useState({ subject: '', faculty: '', room: '' });
 
+    const [curriculumSubjects, setCurriculumSubjects] = useState([]);
+    const [assignedCourses, setAssignedCourses] = useState([]);
+
     // Load HOD department on mount
     useEffect(() => {
         const loadDept = async () => {
-            if (!department && user?.uid) {
-                const profile = await getUserProfile(user.uid);
+            if (!department && user?.id) {
+                const profile = await getUserProfile(user.id);
                 if (profile?.department) setDepartment(profile.department);
             }
         };
@@ -57,15 +59,27 @@ export default function ManageSchedules({ navigation, route }) {
         loadTimetable();
     }, [department, selectedSem]);
 
+    useEffect(() => {
+        if (!department) return;
+        const loadSubj = async () => {
+            const subj = await getAllCurriculumSubjects(department);
+            setCurriculumSubjects(subj);
+        };
+        loadSubj();
+        
+        const unsub = subscribeToDepartmentCourses(department, setAssignedCourses);
+        return () => unsub();
+    }, [department]);
+
     const getTimetableDocId = () => `${department.replace(/\s/g, '_')}_${selectedSem}`;
 
     const loadTimetable = async () => {
         setLoading(true);
         try {
             const docId = getTimetableDocId();
-            const snap = await getDoc(doc(db, 'timetables', docId));
-            if (snap.exists()) {
-                setTimetable(snap.data().schedule || {});
+            const { data, error } = await supabase.from('timetables').select('*').eq('id', docId).single();
+            if (data) {
+                setTimetable(data.schedule || {});
             } else {
                 // Initialize empty timetable
                 const empty = {};
@@ -83,13 +97,15 @@ export default function ManageSchedules({ navigation, route }) {
         setSaving(true);
         try {
             const docId = getTimetableDocId();
-            await setDoc(doc(db, 'timetables', docId), {
+            const { error } = await supabase.from('timetables').upsert({
+                id: docId,
                 department,
                 semester: selectedSem,
                 schedule: timetable,
-                updatedAt: new Date().toISOString(),
-                updatedBy: user?.uid || '',
+                updated_at: new Date().toISOString(),
+                updated_by: user?.id || null,
             });
+            if (error) throw error;
             Alert.alert('Saved!', `Timetable for ${selectedSem} (${department}) has been saved.`);
         } catch (e) {
             console.error('Error saving timetable:', e);
@@ -264,36 +280,71 @@ export default function ManageSchedules({ navigation, route }) {
                         </Text>
 
                         <View style={styles.formGroup}>
-                            <Text style={styles.inputLabel}>Subject Name</Text>
+                            <Text style={styles.inputLabel}>Select Subject from Curriculum</Text>
+                            <ScrollView style={{ maxHeight: 180, width: '100%', marginBottom: 4 }} showsVerticalScrollIndicator={false}>
+                                {curriculumSubjects.filter(s => {
+                                    const semNum = selectedSem.replace('S', '');
+                                    return s.semester === selectedSem || s.semester === `Sem ${semNum}` || s.semester === `S${semNum}`;
+                                }).length > 0 ? (
+                                    curriculumSubjects.filter(s => {
+                                        const semNum = selectedSem.replace('S', '');
+                                        return s.semester === selectedSem || s.semester === `Sem ${semNum}` || s.semester === `S${semNum}`;
+                                    }).map((s, i) => {
+                                        const assigned = assignedCourses.find(c => c.subject_code === s.code || c.subjectCode === s.code);
+                                        const facName = assigned ? (assigned.faculty_name || assigned.facultyName) : '';
+                                        const isSelected = formData.subject === s.name;
+                                        return (
+                                            <TouchableOpacity 
+                                                key={i} 
+                                                style={[styles.subjectOptionBtn, isSelected && styles.subjectOptionBtnSelected]}
+                                                onPress={() => setFormData({ ...formData, subject: s.name, faculty: facName })}
+                                            >
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={[styles.subjectOptionName, isSelected && { color: '#0055ff' }]}>{s.name}</Text>
+                                                    {facName ? <Text style={styles.subjectOptionFac}>{facName}</Text> : null}
+                                                </View>
+                                                {isSelected && <MaterialIcons name="check-circle" size={20} color="#0055ff" />}
+                                            </TouchableOpacity>
+                                        );
+                                    })
+                                ) : (
+                                    <Text style={{ fontStyle: 'italic', color: '#94a3b8', padding: 8 }}>No subjects added for {selectedSem} yet.</Text>
+                                )}
+                            </ScrollView>
+                        </View>
+
+                        <View style={styles.formGroup}>
+                            <Text style={styles.inputLabel}>Or Custom Subject / Event</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="e.g. Data Structures"
+                                placeholder="e.g. Lunch Break, Library..."
                                 placeholderTextColor="#94a3b8"
                                 value={formData.subject}
                                 onChangeText={t => setFormData({ ...formData, subject: t })}
                             />
                         </View>
 
-                        <View style={styles.formGroup}>
-                            <Text style={styles.inputLabel}>Faculty Name</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="e.g. Dr. Smith"
-                                placeholderTextColor="#94a3b8"
-                                value={formData.faculty}
-                                onChangeText={t => setFormData({ ...formData, faculty: t })}
-                            />
-                        </View>
-
-                        <View style={styles.formGroup}>
-                            <Text style={styles.inputLabel}>Room / Lab</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="e.g. Room 302"
-                                placeholderTextColor="#94a3b8"
-                                value={formData.room}
-                                onChangeText={t => setFormData({ ...formData, room: t })}
-                            />
+                        <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
+                            <View style={[styles.formGroup, { flex: 1 }]}>
+                                <Text style={styles.inputLabel}>Faculty Name</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="e.g. Dr. Smith"
+                                    placeholderTextColor="#94a3b8"
+                                    value={formData.faculty}
+                                    onChangeText={t => setFormData({ ...formData, faculty: t })}
+                                />
+                            </View>
+                            <View style={[styles.formGroup, { flex: 1 }]}>
+                                <Text style={styles.inputLabel}>Room / Lab</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="e.g. Room 302"
+                                    placeholderTextColor="#94a3b8"
+                                    value={formData.room}
+                                    onChangeText={t => setFormData({ ...formData, room: t })}
+                                />
+                            </View>
                         </View>
 
                         <TouchableOpacity style={styles.modalSaveBtn} onPress={saveSlot}>
@@ -372,4 +423,10 @@ const styles = StyleSheet.create({
     modalSaveBtnText: { fontSize: 15, fontWeight: '700', color: 'white' },
     modalCancelBtn: { height: 48, alignItems: 'center', justifyContent: 'center', width: '100%', marginTop: 4 },
     modalCancelText: { fontSize: 15, fontWeight: '600', color: '#64748b' },
+
+    // Subject Options
+    subjectOptionBtn: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 10, backgroundColor: '#f8fafc', marginBottom: 8, borderWidth: 1, borderColor: '#e2e8f0' },
+    subjectOptionBtnSelected: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
+    subjectOptionName: { fontSize: 14, fontWeight: '600', color: '#1e293b' },
+    subjectOptionFac: { fontSize: 12, color: '#64748b', marginTop: 2 },
 });

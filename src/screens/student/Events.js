@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshCont
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getUpcomingEvents, subscribeToEvents } from '../../services/firestoreService';
+import { getUpcomingEvents, subscribeToEvents } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 

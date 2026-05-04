@@ -1,9 +1,9 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Modal } from 'react-native';
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
-import { getUserProfile } from '../../services/firestoreService';
+import { getUserProfile } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -12,10 +12,11 @@ export default function StudentProfile({ route, navigation }) {
     const { user, logout } = useContext(AuthContext);
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [showImageModal, setShowImageModal] = useState(false);
 
     useEffect(() => {
         const fetchProfile = async () => {
-            const fetchUid = targetUid || user?.uid;
+            const fetchUid = targetUid || user?.id;
             if (fetchUid) {
                 const data = await getUserProfile(fetchUid);
                 setProfile(data);
@@ -86,19 +87,15 @@ export default function StudentProfile({ route, navigation }) {
                     </View>
 
                     <View style={styles.actionRow}>
-                        <TouchableOpacity style={styles.viewButton}>
+                        <TouchableOpacity style={styles.viewButton} onPress={() => setShowImageModal(true)}>
                             <MaterialCommunityIcons name="eye-outline" size={20} color="#101318" />
-                            <Text style={styles.viewButtonText}>View</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.uploadButton}>
-                            <MaterialCommunityIcons name="camera-plus-outline" size={20} color="white" />
-                            <Text style={styles.uploadButtonText}>Upload</Text>
+                            <Text style={styles.viewButtonText}>View Photo</Text>
                         </TouchableOpacity>
                     </View>
 
                     <View style={styles.nameSection}>
                         <Text style={styles.nameText}>{profile?.name || "User"}</Text>
-                        <Text style={styles.idText}>{targetUid || user?.uid}</Text>
+                        <Text style={styles.idText}>{targetUid || user?.id}</Text>
                         <View style={styles.deptBadge}>
                             <Text style={styles.deptText}>{profile?.department || "Department N/A"}</Text>
                         </View>
@@ -173,6 +170,24 @@ export default function StudentProfile({ route, navigation }) {
 
                 <View style={{ height: 40 }} />
             </ScrollView>
+
+            {/* Profile Image Full-Screen Modal */}
+            <Modal visible={showImageModal} transparent animationType="fade" onRequestClose={() => setShowImageModal(false)}>
+                <TouchableOpacity style={styles.imageModalOverlay} activeOpacity={1} onPress={() => setShowImageModal(false)}>
+                    <View style={styles.imageModalContent}>
+                        {profile?.profileImage ? (
+                            <Image source={{ uri: profile.profileImage }} style={styles.imageModalPhoto} resizeMode="contain" />
+                        ) : (
+                            <View style={[styles.imageModalPhoto, { backgroundColor: '#e2e8f0', justifyContent: 'center', alignItems: 'center' }]}>
+                                <MaterialCommunityIcons name="account" size={120} color="#94a3b8" />
+                            </View>
+                        )}
+                        <TouchableOpacity style={styles.imageModalClose} onPress={() => setShowImageModal(false)}>
+                            <MaterialCommunityIcons name="close" size={24} color="white" />
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </View>
     );
 }
@@ -193,10 +208,13 @@ const styles = StyleSheet.create({
     avatarBorder: { position: 'absolute', width: 128, height: 128, borderRadius: 64, borderWidth: 4, borderColor: 'white', backgroundColor: '#e5e7eb', zIndex: 5, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
 
     actionRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
-    viewButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: 'white', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, minWidth: 100 },
+    viewButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 32, backgroundColor: 'white', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12 },
     viewButtonText: { fontSize: 14, fontWeight: 'bold', color: '#101318' },
-    uploadButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: '#0055ff', borderRadius: 12, minWidth: 100, shadowColor: '#0055ff', shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 },
-    uploadButtonText: { fontSize: 14, fontWeight: 'bold', color: 'white' },
+
+    imageModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
+    imageModalContent: { width: '100%', alignItems: 'center', justifyContent: 'center' },
+    imageModalPhoto: { width: width * 0.85, height: width * 0.85, borderRadius: 16 },
+    imageModalClose: { position: 'absolute', top: -60, right: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
 
     nameSection: { alignItems: 'center', gap: 4 },
     nameText: { fontSize: 24, fontWeight: 'bold', color: '#101318' },

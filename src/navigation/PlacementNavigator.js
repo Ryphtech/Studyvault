@@ -25,6 +25,9 @@ import ChatRoom from '../screens/common/ChatRoom';
 import NewChat from '../screens/common/NewChat';
 import NotificationDetail from '../screens/common/NotificationDetail';
 import SubmitFeedback from '../screens/student/SubmitFeedback';
+import PrivacySettings from '../screens/common/PrivacySettings';
+import HelpCenter from '../screens/common/HelpCenter';
+import TermsOfService from '../screens/common/TermsOfService';
 
 const Stack = createStackNavigator();
 
@@ -44,6 +47,9 @@ export default function PlacementNavigator() {
             <Stack.Screen name="NewChat" component={NewChat} />
             <Stack.Screen name="NotificationDetail" component={NotificationDetail} />
             <Stack.Screen name="SubmitFeedback" component={SubmitFeedback} />
+            <Stack.Screen name="PrivacySettings" component={PrivacySettings} />
+            <Stack.Screen name="HelpCenter" component={HelpCenter} />
+            <Stack.Screen name="TermsOfService" component={TermsOfService} />
         </Stack.Navigator>
     );
 }

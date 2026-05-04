@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, Alert, ActivityIndicator, Modal } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
-import { getUserProfile, getFacultyCourses, getStudentsForMarksEntry, saveMarksForCourse } from '../../services/firestoreService';
+import { getUserProfile, getFacultyCourses, getStudentsForMarksEntry, saveMarksForCourse } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
-const assessmentTypes = ['Internal 1', 'Internal 2', 'Assignment', 'Lab'];
+const DEFAULT_TESTS = ['Internal 1', 'Internal 2', 'Assignment', 'Lab'];
+const DEFAULT_MAX = 50;
 
 export default function MarksUpload({ navigation }) {
     const { user } = useContext(AuthContext);
@@ -16,15 +17,23 @@ export default function MarksUpload({ navigation }) {
     const [profile, setProfile] = useState(null);
     const [courses, setCourses] = useState([]);
     const [selectedCourse, setSelectedCourse] = useState(null);
+    const [assessmentTypes, setAssessmentTypes] = useState(DEFAULT_TESTS);
     const [selectedTab, setSelectedTab] = useState('Internal 1');
     const [students, setStudents] = useState([]);
     const [classAverage, setClassAverage] = useState(0);
+    const [maxMarksMap, setMaxMarksMap] = useState(() => {
+        const m = {}; DEFAULT_TESTS.forEach(t => m[t] = DEFAULT_MAX); return m;
+    });
+    const [showAddTest, setShowAddTest] = useState(false);
+    const [newTestName, setNewTestName] = useState('');
+    const [newTestMax, setNewTestMax] = useState('50');
+    const [editingMaxMarks, setEditingMaxMarks] = useState(false);
 
     // Fetch faculty profile and courses
     useEffect(() => {
         const init = async () => {
             try {
-                const facultyId = user?.uid;
+                const facultyId = user?.id;
                 if (!facultyId) { setLoading(false); return; }
                 const [profileData, coursesData] = await Promise.all([
                     getUserProfile(facultyId),
@@ -50,25 +59,50 @@ export default function MarksUpload({ navigation }) {
         init();
     }, []);
 
-    // Recalculate average when students change
+    const currentMax = maxMarksMap[selectedTab] || DEFAULT_MAX;
+
+    // Recalculate average when students or tab change
     useEffect(() => {
         let totalMarks = 0;
         let count = 0;
         students.forEach(s => {
             if (s.marks !== '' && s.marks !== undefined) {
-                totalMarks += (parseInt(s.marks) / (s.maxMarks || 50)) * 100;
+                totalMarks += (parseInt(s.marks) / currentMax) * 100;
                 count++;
             }
         });
         setClassAverage(count > 0 ? Math.round(totalMarks / count) : 0);
-    }, [students]);
+    }, [students, selectedTab, maxMarksMap]);
 
     const handleMarkChange = (id, text) => {
         if (text === '' || /^\d+$/.test(text)) {
-            const maxMarks = students.find(s => s.id === id)?.maxMarks || 50;
-            if (text !== '' && parseInt(text) > maxMarks) return;
+            if (text !== '' && parseInt(text) > currentMax) return;
             setStudents(prev => prev.map(s => s.id === id ? { ...s, marks: text } : s));
         }
+    };
+
+    const handleAddTest = () => {
+        const name = newTestName.trim();
+        if (!name) { Alert.alert('Error', 'Enter a test name.'); return; }
+        if (assessmentTypes.includes(name)) { Alert.alert('Error', 'Test already exists.'); return; }
+        const max = parseInt(newTestMax) || DEFAULT_MAX;
+        setAssessmentTypes(prev => [...prev, name]);
+        setMaxMarksMap(prev => ({ ...prev, [name]: max }));
+        setSelectedTab(name);
+        setStudents(prev => prev.map(s => ({ ...s, marks: '' })));
+        setNewTestName(''); setNewTestMax('50'); setShowAddTest(false);
+    };
+
+    const handleDeleteTest = (name) => {
+        if (DEFAULT_TESTS.includes(name)) { Alert.alert('Info', 'Cannot delete default tests.'); return; }
+        Alert.alert('Delete Test', `Remove "${name}"?`, [
+            { text: 'Cancel' },
+            { text: 'Delete', style: 'destructive', onPress: () => {
+                setAssessmentTypes(prev => prev.filter(t => t !== name));
+                setMaxMarksMap(prev => { const m = { ...prev }; delete m[name]; return m; });
+                if (selectedTab === name) setSelectedTab(assessmentTypes[0]);
+            }}
+        ]);
     };
 
     const handleSaveMarks = async () => {
@@ -88,9 +122,9 @@ export default function MarksUpload({ navigation }) {
             courseId: selectedCourse.code || selectedCourse.subjectCode || 'UNKNOWN',
             courseName: selectedCourse.name || selectedCourse.subjectName || 'Unknown Course',
             assessmentType: selectedTab,
-            facultyId: user?.uid || '',
+            facultyId: user?.id || '',
             facultyName: profile?.name || 'Faculty',
-            students: studentsWithMarks,
+            students: studentsWithMarks.map(s => ({ ...s, maxMarks: currentMax })),
         });
         setSaving(false);
 
@@ -103,9 +137,9 @@ export default function MarksUpload({ navigation }) {
         }
     };
 
-    const getPercentage = (marks, max) => {
+    const getPercentage = (marks) => {
         if (!marks) return '-';
-        return Math.round((parseInt(marks) / max) * 100) + '%';
+        return Math.round((parseInt(marks) / currentMax) * 100) + '%';
     };
 
     const getScoreColor = (percentage) => {
@@ -178,10 +212,15 @@ export default function MarksUpload({ navigation }) {
                             key={type}
                             style={[styles.tabChip, selectedTab === type && styles.tabChipActive]}
                             onPress={() => setSelectedTab(type)}
+                            onLongPress={() => handleDeleteTest(type)}
                         >
                             <Text style={[styles.tabText, selectedTab === type && styles.tabTextActive]}>{type}</Text>
                         </TouchableOpacity>
                     ))}
+                    <TouchableOpacity style={styles.addTabChip} onPress={() => setShowAddTest(true)}>
+                        <MaterialCommunityIcons name="plus" size={18} color="#0055ff" />
+                        <Text style={styles.addTabText}>Add</Text>
+                    </TouchableOpacity>
                 </ScrollView>
             </View>
 
@@ -214,10 +253,13 @@ export default function MarksUpload({ navigation }) {
                             <Text style={styles.statusValueWarning}>{selectedTab}</Text>
                         </View>
                         <View style={styles.dividerVertical} />
-                        <View style={{ alignItems: 'flex-end' }}>
+                        <TouchableOpacity style={{ alignItems: 'flex-end' }} onPress={() => setEditingMaxMarks(true)}>
                             <Text style={styles.statusLabel}>MAX MARKS</Text>
-                            <Text style={styles.statusValueNormal}>50</Text>
-                        </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Text style={styles.statusValueNormal}>{currentMax}</Text>
+                                <MaterialCommunityIcons name="pencil-outline" size={14} color="#0055ff" />
+                            </View>
+                        </TouchableOpacity>
                     </View>
                 </View>
 
@@ -253,20 +295,20 @@ export default function MarksUpload({ navigation }) {
                                     <TextInput
                                         style={[
                                             styles.input,
-                                            getPercentage(student.marks, student.maxMarks) !== '-' && parseInt(getPercentage(student.marks, student.maxMarks)) < 40 && styles.inputDanger
+                                            getPercentage(student.marks) !== '-' && parseInt(getPercentage(student.marks)) < 40 && styles.inputDanger
                                         ]}
                                         value={student.marks}
                                         onChangeText={(text) => handleMarkChange(student.id, text)}
                                         placeholder="-"
                                         keyboardType="numeric"
-                                        maxLength={2}
+                                        maxLength={String(currentMax).length}
                                     />
                                     <View style={styles.percentageBox}>
                                         <Text style={[
                                             styles.percentageText,
-                                            { color: getScoreColor(getPercentage(student.marks, student.maxMarks)) }
+                                            { color: getScoreColor(getPercentage(student.marks)) }
                                         ]}>
-                                            {getPercentage(student.marks, student.maxMarks)}
+                                            {getPercentage(student.marks)}
                                         </Text>
                                     </View>
                                 </View>
@@ -301,6 +343,59 @@ export default function MarksUpload({ navigation }) {
                     )}
                 </TouchableOpacity>
             </View>
+
+            {/* Add Test Modal */}
+            <Modal visible={showAddTest} transparent animationType="fade">
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowAddTest(false)}>
+                    <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+                        <Text style={styles.modalTitle}>Add New Test</Text>
+                        <View style={{ gap: 12 }}>
+                            <View>
+                                <Text style={styles.modalLabel}>Test Name</Text>
+                                <TextInput style={styles.modalInput} value={newTestName} onChangeText={setNewTestName} placeholder="e.g. Midterm, Quiz 1" placeholderTextColor="#9ca3af" />
+                            </View>
+                            <View>
+                                <Text style={styles.modalLabel}>Max Marks</Text>
+                                <TextInput style={styles.modalInput} value={newTestMax} onChangeText={setNewTestMax} keyboardType="numeric" placeholder="50" placeholderTextColor="#9ca3af" />
+                            </View>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+                            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowAddTest(false)}>
+                                <Text style={styles.modalCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.modalAddBtn} onPress={handleAddTest}>
+                                <Text style={styles.modalAddText}>Add Test</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* Edit Max Marks Modal */}
+            <Modal visible={editingMaxMarks} transparent animationType="fade">
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEditingMaxMarks(false)}>
+                    <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+                        <Text style={styles.modalTitle}>Edit Max Marks</Text>
+                        <ScrollView style={{ maxHeight: 300 }}>
+                            {assessmentTypes.map(type => (
+                                <View key={type} style={styles.maxMarksRow}>
+                                    <Text style={styles.maxMarksLabel}>{type}</Text>
+                                    <TextInput
+                                        style={styles.maxMarksInput}
+                                        value={String(maxMarksMap[type] || DEFAULT_MAX)}
+                                        onChangeText={t => setMaxMarksMap(prev => ({ ...prev, [type]: parseInt(t) || 0 }))}
+                                        keyboardType="numeric"
+                                        maxLength={3}
+                                    />
+                                </View>
+                            ))}
+                        </ScrollView>
+                        <TouchableOpacity style={[styles.modalAddBtn, { marginTop: 16 }]} onPress={() => { setStudents(prev => prev.map(s => ({ ...s, marks: '' }))); setEditingMaxMarks(false); }}>
+                            <Text style={styles.modalAddText}>Done</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </View>
     );
 }
@@ -381,5 +476,22 @@ const styles = StyleSheet.create({
     averageValue: { fontSize: 18, fontWeight: 'bold', color: '#101318' },
 
     saveButton: { flex: 1.5, backgroundColor: '#0055ff', height: 48, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: '#0055ff', shadowOpacity: 0.3, elevation: 4 },
-    saveButtonText: { color: 'white', fontSize: 14, fontWeight: 'bold' }
+    saveButtonText: { color: 'white', fontSize: 14, fontWeight: 'bold' },
+
+    addTabChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#eef2ff', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: '#dbeafe', borderStyle: 'dashed' },
+    addTabText: { color: '#0055ff', fontSize: 13, fontWeight: '600' },
+
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 },
+    modalContent: { backgroundColor: 'white', borderRadius: 20, padding: 24, elevation: 10 },
+    modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#101318', marginBottom: 16 },
+    modalLabel: { fontSize: 13, fontWeight: '600', color: '#5e6d8d', marginBottom: 6, marginLeft: 2 },
+    modalInput: { backgroundColor: '#f5f6f8', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: '#101318' },
+    modalCancelBtn: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f6f8' },
+    modalCancelText: { fontSize: 15, fontWeight: '600', color: '#5e6d8d' },
+    modalAddBtn: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0055ff' },
+    modalAddText: { fontSize: 15, fontWeight: 'bold', color: 'white' },
+
+    maxMarksRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+    maxMarksLabel: { fontSize: 15, fontWeight: '600', color: '#101318', flex: 1 },
+    maxMarksInput: { width: 64, height: 40, borderRadius: 8, backgroundColor: '#f5f6f8', textAlign: 'center', fontWeight: 'bold', color: '#101318', borderWidth: 1, borderColor: '#e5e7eb', fontSize: 16 },
 });

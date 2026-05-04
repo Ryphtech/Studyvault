@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'reac
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { subscribeToNotifications } from '../../services/firestoreService';
+import { subscribeToNotifications } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 

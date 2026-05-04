@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import { AuthContext } from '../../context/AuthContext';
-import { getStudentMarks } from '../../services/firestoreService';
+import { getStudentMarks } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -53,7 +53,7 @@ export default function MarksScreen({ navigation }) {
 
     const fetchMarks = async () => {
         try {
-            const studentId = user?.uid || 'student_demo';
+            const studentId = user?.id || 'student_demo';
             const records = await getStudentMarks(studentId);
             setMarksData(records);
 

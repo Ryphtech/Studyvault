@@ -2,9 +2,8 @@ import React, { useState, useContext } from 'react';
 import { View, StyleSheet, TouchableOpacity, ImageBackground, TextInput, Dimensions, KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList } from 'react-native';
 import { Text, ActivityIndicator, IconButton } from 'react-native-paper';
 import { AuthContext } from '../../context/AuthContext';
-import { setDoc, doc } from 'firebase/firestore';
-import { db } from '../../services/firebaseConfig';
-import { validateRoleCode } from '../../services/firestoreService';
+import { supabase } from '../../services/supabaseClient';
+import { validateRoleCode } from '../../services/supabaseService';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -67,23 +66,25 @@ export default function RegisterScreen({ navigation }) {
                 }
             }
 
-            const userCredential = await register(email, password);
-            const user = userCredential.user;
-            const defaultName = email.split('@')[0];
-            const userData = {
+            const result = await register(email, password);
+            const user = result.user;
+            if (!user) throw new Error('Registration failed. Please try again.');
+            const profileData = {
+                id: user.id,
                 name: name.trim(),
                 email,
                 role,
-                createdAt: new Date().toISOString()
+                created_at: new Date().toISOString()
             };
             // If the code carried a department (e.g. HOD codes), save it to the profile
             if (validation.department) {
-                userData.department = validation.department;
+                profileData.department = validation.department;
             }
             if (role === 'student') {
-                userData.semester = parseInt(semester);
+                profileData.semester = parseInt(semester);
             }
-            await setDoc(doc(db, "users", user.uid), userData);
+            const { error: profileError } = await supabase.from('profiles').insert(profileData);
+            if (profileError) throw profileError;
         } catch (error) {
             console.error(error);
             alert("Registration failed: " + error.message);

@@ -1,11 +1,29 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, ActivityIndicator, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, ActivityIndicator, Alert, Modal } from 'react-native';
 import { Text, Switch } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
-import { getStudentsForAttendance, saveAttendance, getUserProfile } from '../../services/firestoreService';
+import { getStudentsForAttendance, saveAttendance, getUserProfile, getFacultyCourses, getAttendanceForDate, updateAttendanceRecord } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
+
+// Generate date chips for the next 7 days (including today)
+const generateDates = () => {
+    const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const dates = [];
+    for (let i = -3; i <= 3; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() + i);
+        dates.push({
+            date: d,
+            label: i === 0 ? 'TODAY' : i === 1 ? 'TOMORROW' : i === -1 ? 'YESTERDAY' : days[d.getDay()],
+            display: `${d.getDate()} ${months[d.getMonth()]}`,
+            dateStr: d.toISOString().split('T')[0],
+        });
+    }
+    return dates;
+};
 
 export default function AttendanceManager({ route, navigation }) {
     const { user } = useContext(AuthContext);
@@ -15,25 +33,76 @@ export default function AttendanceManager({ route, navigation }) {
     const [markAllPresent, setMarkAllPresent] = useState(false);
     const [profile, setProfile] = useState(null);
 
-    // Get course info from navigation params
-    const courseId = route?.params?.courseId || '';
-    const courseName = route?.params?.courseName || '';
+    const [selectedCourseId, setSelectedCourseId] = useState(route?.params?.courseId || '');
+    const [selectedCourseName, setSelectedCourseName] = useState(route?.params?.courseName || '');
+    const [assignedCourses, setAssignedCourses] = useState([]);
+    const [courseModalVisible, setCourseModalVisible] = useState(false);
+
+    // Date & edit state
+    const dateChips = generateDates();
+    const todayStr = new Date().toISOString().split('T')[0];
+    const [selectedDate, setSelectedDate] = useState(dateChips.find(d => d.label === 'TODAY'));
+    const [isEditMode, setIsEditMode] = useState(false);
 
     useEffect(() => {
         const init = async () => {
-            // Fetch the faculty profile for header display
-            if (user?.uid) {
-                const profileData = await getUserProfile(user.uid);
+            if (user?.id) {
+                const [profileData, courses] = await Promise.all([
+                    getUserProfile(user.id),
+                    getFacultyCourses(user.id)
+                ]);
                 setProfile(profileData);
-            }
-            if (courseId) {
-                const data = await getStudentsForAttendance(courseId);
-                setStudents(data);
+                setAssignedCourses(courses);
+
+                let activeId = route?.params?.courseId || '';
+                let activeName = route?.params?.courseName || '';
+
+                if (!activeId && courses && courses.length > 0) {
+                    activeId = courses[0].subjectCode;
+                    activeName = courses[0].subjectName;
+                    setSelectedCourseId(activeId);
+                    setSelectedCourseName(activeName);
+                }
+
+                if (activeId) {
+                    await loadStudentsForDate(activeId, selectedDate.dateStr);
+                }
             }
             setLoading(false);
         };
         init();
-    }, []);
+    }, [user, route?.params?.courseId]);
+
+    const loadStudentsForDate = async (courseId, dateStr) => {
+        setLoading(true);
+        // Get all students
+        const allStudents = await getStudentsForAttendance(courseId);
+        // Check if records exist for this date
+        const existingRecords = await getAttendanceForDate(courseId, dateStr);
+
+        if (existingRecords.length > 0) {
+            // Map saved statuses onto students
+            const recordMap = {};
+            existingRecords.forEach(r => { recordMap[r.student_id] = r.status; });
+            const merged = allStudents.map(s => ({
+                ...s,
+                status: recordMap[s.id] || 'P',
+            }));
+            setStudents(merged);
+            setIsEditMode(true);
+        } else {
+            setStudents(allStudents);
+            setIsEditMode(false);
+        }
+        setLoading(false);
+    };
+
+    const handleDateSelect = async (chip) => {
+        setSelectedDate(chip);
+        if (selectedCourseId) {
+            await loadStudentsForDate(selectedCourseId, chip.dateStr);
+        }
+    };
 
     const toggleStatus = (id, newStatus) => {
         setStudents(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s));
@@ -54,12 +123,17 @@ export default function AttendanceManager({ route, navigation }) {
 
     const handleSubmit = async () => {
         setSaving(true);
-        const success = await saveAttendance(courseId, courseName, new Date(), students);
+        let success;
+        if (isEditMode) {
+            success = await updateAttendanceRecord(selectedCourseId, selectedCourseName, selectedDate.date, students);
+        } else {
+            success = await saveAttendance(selectedCourseId, selectedCourseName, selectedDate.date, students, user?.id);
+        }
         setSaving(false);
 
         if (success) {
-            Alert.alert("Success", "Attendance saved successfully!");
-            navigation.goBack();
+            setIsEditMode(true); // Now it's saved, future submits are edits
+            Alert.alert("Success", isEditMode ? "Attendance updated successfully!" : "Attendance saved successfully!");
         } else {
             Alert.alert("Error", "Failed to save attendance. Please try again.");
         }
@@ -76,7 +150,7 @@ export default function AttendanceManager({ route, navigation }) {
                     </View>
                     <View>
                         <Text style={styles.headerTitle}>{profile?.name || 'Faculty'}</Text>
-                        <Text style={styles.headerSubtitle}>{courseName || 'Select a course'}</Text>
+                        <Text style={styles.headerSubtitle}>{selectedCourseName || 'Select a course'}</Text>
                     </View>
                 </View>
                 <TouchableOpacity style={styles.notificationButton}>
@@ -84,25 +158,22 @@ export default function AttendanceManager({ route, navigation }) {
                 </TouchableOpacity>
             </View>
 
-            {/* Date Chips */}
+            {/* Date Chips - Dynamic */}
             <View style={styles.dateSelectorContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateSelectorContent}>
-                    <TouchableOpacity style={styles.dateChipActive}>
-                        <Text style={styles.dateChipLabelActive}>TODAY</Text>
-                        <Text style={styles.dateChipValueActive}>12 Oct</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.dateChip}>
-                        <Text style={styles.dateChipLabel}>TOMORROW</Text>
-                        <Text style={styles.dateChipValue}>13 Oct</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.dateChip}>
-                        <Text style={styles.dateChipLabel}>TUE</Text>
-                        <Text style={styles.dateChipValue}>14 Oct</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.dateChip}>
-                        <Text style={styles.dateChipLabel}>WED</Text>
-                        <Text style={styles.dateChipValue}>15 Oct</Text>
-                    </TouchableOpacity>
+                    {dateChips.map((chip, idx) => {
+                        const isActive = selectedDate.dateStr === chip.dateStr;
+                        return (
+                            <TouchableOpacity
+                                key={idx}
+                                style={isActive ? styles.dateChipActive : styles.dateChip}
+                                onPress={() => handleDateSelect(chip)}
+                            >
+                                <Text style={isActive ? styles.dateChipLabelActive : styles.dateChipLabel}>{chip.label}</Text>
+                                <Text style={isActive ? styles.dateChipValueActive : styles.dateChipValue}>{chip.display}</Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </ScrollView>
             </View>
 
@@ -110,43 +181,45 @@ export default function AttendanceManager({ route, navigation }) {
 
                 {/* Active Class Section */}
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Current Class</Text>
-                    <View style={styles.activeNowBadge}>
-                        <Text style={styles.activeNowText}>Active Now</Text>
+                    <Text style={styles.sectionTitle}>{isEditMode ? 'Edit Attendance' : 'Current Class'}</Text>
+                    <View style={[styles.activeNowBadge, isEditMode && { backgroundColor: '#fef3c7' }]}>
+                        <Text style={[styles.activeNowText, isEditMode && { color: '#d97706' }]}>{isEditMode ? '✏️ Editing' : 'Active Now'}</Text>
                     </View>
                 </View>
 
                 <View style={styles.classCard}>
-                    <View style={styles.classCardTop}>
+                    <TouchableOpacity style={styles.classCardTop} onPress={() => setCourseModalVisible(true)}>
                         <View style={styles.classInfo}>
                             <View style={styles.classIconBox}>
                                 <MaterialCommunityIcons name="book-open-page-variant" size={28} color="#0055ff" />
                             </View>
                             <View>
-                                <Text style={styles.className}>Computer Networks</Text>
-                                <Text style={styles.classDetails}>CS-302 • Semester 5</Text>
+                                <Text style={styles.className}>{selectedCourseName || 'Select a Class'}</Text>
+                                <Text style={styles.classDetails}>{selectedCourseId || 'No Code Available'}</Text>
                             </View>
                         </View>
-                        <TouchableOpacity style={styles.moreButton}>
-                            <MaterialCommunityIcons name="dots-horizontal" size={20} color="#5e6d8d" />
-                        </TouchableOpacity>
-                    </View>
+                        <View style={styles.moreButton}>
+                            <MaterialCommunityIcons name="chevron-down" size={20} color="#5e6d8d" />
+                        </View>
+                    </TouchableOpacity>
 
                     <View style={styles.classMetaGrid}>
                         <View style={styles.metaItem}>
                             <MaterialCommunityIcons name="clock-outline" size={18} color="#5e6d8d" />
-                            <Text style={styles.metaText}>09:00 - 10:00 AM</Text>
+                            <Text style={styles.metaText}>{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
                         </View>
                         <View style={styles.metaItem}>
-                            <MaterialCommunityIcons name="map-marker-outline" size={18} color="#5e6d8d" />
-                            <Text style={styles.metaText}>Room 402</Text>
+                            <MaterialCommunityIcons name="calendar-today" size={18} color="#5e6d8d" />
+                            <Text style={styles.metaText}>{selectedDate.display}</Text>
                         </View>
                     </View>
 
                     <View style={styles.statusRow}>
                         <View>
                             <Text style={styles.statusLabel}>STATUS</Text>
-                            <Text style={styles.statusValuePending}>Attendance Pending</Text>
+                            <Text style={isEditMode ? [styles.statusValuePending, { color: '#d97706' }] : styles.statusValuePending}>
+                                {isEditMode ? 'Previously Saved' : 'Attendance Pending'}
+                            </Text>
                         </View>
                         <View style={styles.dividerVertical} />
                         <View style={{ alignItems: 'flex-end' }}>
@@ -222,19 +295,7 @@ export default function AttendanceManager({ route, navigation }) {
                     )}
                 </View>
 
-                {/* Upcoming Teaser */}
-                <View style={{ marginTop: 24, opacity: 0.6 }}>
-                    <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>Upcoming Later</Text>
-                    <View style={styles.upcomingCard}>
-                        <View style={styles.upcomingIconBox}>
-                            <MaterialCommunityIcons name="database" size={24} color="#6b7280" />
-                        </View>
-                        <View>
-                            <Text style={styles.upcomingTitle}>Database Systems (CS-304)</Text>
-                            <Text style={styles.upcomingSubtitle}>11:00 AM • Room 101</Text>
-                        </View>
-                    </View>
-                </View>
+                {/* Upcoming Teaser Hidden until full scheduling is done */}
 
                 <View style={{ height: 100 }} />
             </ScrollView>
@@ -252,18 +313,59 @@ export default function AttendanceManager({ route, navigation }) {
                     </View>
                 </View>
                 <TouchableOpacity
-                    style={[styles.submitButton, saving && { opacity: 0.7 }]}
+                    style={[styles.submitButton, saving && { opacity: 0.7 }, isEditMode && { backgroundColor: '#d97706' }]}
                     onPress={handleSubmit}
                     disabled={saving || loading}
                 >
                     {saving ? (
                         <ActivityIndicator color="white" size="small" />
                     ) : (
-                        <MaterialCommunityIcons name="check-circle-outline" size={20} color="white" />
+                        <MaterialCommunityIcons name={isEditMode ? "pencil-outline" : "check-circle-outline"} size={20} color="white" />
                     )}
-                    <Text style={styles.submitButtonText}>{saving ? 'Saving...' : 'Submit Attendance'}</Text>
+                    <Text style={styles.submitButtonText}>{saving ? 'Saving...' : isEditMode ? 'Update Attendance' : 'Submit Attendance'}</Text>
                 </TouchableOpacity>
             </View>
+            {/* Modal for Course Selection */}
+            <Modal visible={courseModalVisible} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Select Subject</Text>
+                            <TouchableOpacity onPress={() => setCourseModalVisible(false)}>
+                                <MaterialCommunityIcons name="close" size={24} color="#5e6d8d" />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            {assignedCourses.map((c, idx) => (
+                                <TouchableOpacity 
+                                    key={idx} 
+                                    style={[
+                                        styles.courseSelectItem, 
+                                        selectedCourseId === c.subjectCode && styles.courseSelectItemSelected
+                                    ]}
+                                    onPress={async () => {
+                                        setSelectedCourseId(c.subjectCode);
+                                        setSelectedCourseName(c.subjectName);
+                                        setCourseModalVisible(false);
+                                        await loadStudentsForDate(c.subjectCode, selectedDate.dateStr);
+                                    }}
+                                >
+                                    <View style={styles.courseSelectInfo}>
+                                        <Text style={[styles.courseSelectName, selectedCourseId === c.subjectCode && {color: '#0055ff'}]}>{c.subjectName}</Text>
+                                        <Text style={styles.courseSelectCode}>{c.subjectCode}</Text>
+                                    </View>
+                                    {selectedCourseId === c.subjectCode && (
+                                        <MaterialCommunityIcons name="check-circle" size={24} color="#0055ff" />
+                                    )}
+                                </TouchableOpacity>
+                            ))}
+                            {assignedCourses.length === 0 && (
+                                <Text style={{textAlign: 'center', color: '#5e6d8d', marginVertical: 20}}>No courses assigned</Text>
+                            )}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -349,6 +451,16 @@ const styles = StyleSheet.create({
     statDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' },
 
     submitButton: { flex: 1.5, backgroundColor: '#0055ff', height: 48, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: '#0055ff', shadowOpacity: 0.3, elevation: 4 },
-    submitButtonText: { color: 'white', fontSize: 14, fontWeight: 'bold' }
+    submitButtonText: { color: 'white', fontSize: 14, fontWeight: 'bold' },
 
+    // Modal Styles
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    modalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#101318' },
+    courseSelectItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+    courseSelectItemSelected: { backgroundColor: '#eff6ff', paddingHorizontal: 12, borderRadius: 12, borderBottomWidth: 0, marginVertical: 4 },
+    courseSelectInfo: { flex: 1 },
+    courseSelectName: { fontSize: 16, fontWeight: 'bold', color: '#101318', marginBottom: 4 },
+    courseSelectCode: { fontSize: 13, color: '#5e6d8d' }
 });

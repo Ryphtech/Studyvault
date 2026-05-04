@@ -1,6 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../services/firebaseConfig';
+import { supabase } from '../services/supabaseClient';
 import { AuthContext } from './AuthContext';
 
 export const RoleContext = createContext();
@@ -12,24 +11,39 @@ export const RoleProvider = ({ children }) => {
 
     useEffect(() => {
         if (user) {
-            const fetchRole = async () => {
-                try {
-                    const docRef = doc(db, "users", user.uid);
-                    const docSnap = await getDoc(docRef);
-                    if (docSnap.exists()) {
-                        setRole(docSnap.data().role);
-                    } else {
-                        // Fallback or error if role not found
-                        // For development we might want to default to student or leave as null
-                        setRole(null);
+            let cancelled = false;
+
+            const fetchRole = async (retries = 5) => {
+                for (let attempt = 0; attempt < retries; attempt++) {
+                    try {
+                        const { data, error } = await supabase
+                            .from('profiles')
+                            .select('role')
+                            .eq('id', user.id)
+                            .single();
+
+                        if (data?.role && !cancelled) {
+                            setRole(data.role);
+                            setLoading(false);
+                            return;
+                        }
+                    } catch (e) {
+                        console.log(`Role fetch attempt ${attempt + 1} failed, retrying...`);
                     }
-                } catch (e) {
-                    console.error("Error fetching role", e);
-                } finally {
+                    // Wait before retrying (profile may not be inserted yet during registration)
+                    if (attempt < retries - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                }
+                // All retries exhausted
+                if (!cancelled) {
+                    setRole(null);
                     setLoading(false);
                 }
             };
+
             fetchRole();
+            return () => { cancelled = true; };
         } else {
             setRole(null);
             setLoading(false);

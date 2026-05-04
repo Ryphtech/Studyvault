@@ -5,7 +5,7 @@ import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '../../context/AuthContext';
 import { subscribeToDirectChats, subscribeToGroupChats } from '../../services/chatService';
-import { getUserProfile, getAllCurriculumSubjects, getFacultyCourses } from '../../services/firestoreService';
+import { getUserProfile, getAllCurriculumSubjects, getFacultyCourses } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -22,8 +22,8 @@ export default function ChatList({ navigation }) {
 
     useEffect(() => {
         const init = async () => {
-            if (!user?.uid) return;
-            const uProfile = await getUserProfile(user.uid);
+            if (!user?.id) return;
+            const uProfile = await getUserProfile(user.id);
             setProfile(uProfile);
 
             // Fetch course assignments for groups
@@ -35,12 +35,12 @@ export default function ChatList({ navigation }) {
                     courseCodes = subjects.filter(s => s.semester === uProfile.semester).map(s => s.code);
                 }
             } else if (uProfile?.role === 'faculty') {
-                const myCourses = await getFacultyCourses(user.uid);
+                const myCourses = await getFacultyCourses(user.id);
                 courseCodes = myCourses.map(c => c.subjectCode || c.code);
             }
 
             // Subscriptions
-            const unsubDirect = subscribeToDirectChats(user.uid, (chats) => {
+            const unsubDirect = subscribeToDirectChats(user.id, (chats) => {
                 setDirectChats(chats);
             });
 
@@ -80,7 +80,7 @@ export default function ChatList({ navigation }) {
         let subText = item.lastMessage || (isGroup ? 'Tap to join subject discussion...' : 'Start a conversation...');
 
         if (!isGroup && item.participantNames) {
-            const otherUid = item.participants.find(p => p !== user.uid);
+            const otherUid = item.participants.find(p => p !== user.id);
             chatName = item.participantNames[otherUid] || 'User';
         }
 

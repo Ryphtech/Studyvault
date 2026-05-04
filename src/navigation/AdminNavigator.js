@@ -25,6 +25,9 @@ import Notifications from '../screens/common/Notifications';
 import SendNotification from '../screens/common/SendNotification';
 import NotificationDetail from '../screens/common/NotificationDetail';
 import SubmitFeedback from '../screens/student/SubmitFeedback';
+import PrivacySettings from '../screens/common/PrivacySettings';
+import HelpCenter from '../screens/common/HelpCenter';
+import TermsOfService from '../screens/common/TermsOfService';
 
 import StudentProfile from '../screens/student/StudentProfile';
 
@@ -50,6 +53,9 @@ export default function AdminNavigator() {
             <Stack.Screen name="NotificationDetail" component={NotificationDetail} />
             <Stack.Screen name="SubmitFeedback" component={SubmitFeedback} />
             <Stack.Screen name="Profile" component={StudentProfile} />
+            <Stack.Screen name="PrivacySettings" component={PrivacySettings} />
+            <Stack.Screen name="HelpCenter" component={HelpCenter} />
+            <Stack.Screen name="TermsOfService" component={TermsOfService} />
         </Stack.Navigator>
     );
 }

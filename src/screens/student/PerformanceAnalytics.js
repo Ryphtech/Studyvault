@@ -5,7 +5,7 @@ import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LineChart } from 'react-native-chart-kit';
 import { AuthContext } from '../../context/AuthContext';
-import { subscribeToStudentMarks, subscribeToStudentAttendance, getStudentDashboardStats } from '../../services/firestoreService';
+import { subscribeToStudentMarks, subscribeToStudentAttendance, getStudentDashboardStats } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -38,7 +38,7 @@ export default function PerformanceAnalytics({ navigation }) {
     const [subjectScores, setSubjectScores] = useState([0]);
     const [classAvgScores, setClassAvgScores] = useState([0]);
 
-    const studentId = user?.uid;
+    const studentId = user?.id;
 
     // Fetch CGPA (one-shot, from profile)
     useEffect(() => {

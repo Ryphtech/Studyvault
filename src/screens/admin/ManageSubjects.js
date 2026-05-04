@@ -3,9 +3,8 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, Dimensions, 
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getAllCurriculumSubjects, saveAllCurriculumSubjects } from '../../services/firestoreService';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../../services/firebaseConfig';
+import { getAllCurriculumSubjects, saveAllCurriculumSubjects } from '../../services/supabaseService';
+import { supabase } from '../../services/supabaseClient';
 
 export default function ManageSubjects({ navigation }) {
     const insets = useSafeAreaInsets();
@@ -14,17 +13,22 @@ export default function ManageSubjects({ navigation }) {
     const semesters = Array.from({ length: 8 }, (_, i) => `Sem ${i + 1}`);
     const [selectedSemester, setSelectedSemester] = useState('Sem 1');
 
-    // Departments (loaded from Firestore)
+    // Departments (loaded from Supabase)
     const [departments, setDepartments] = useState([]);
     const [selectedDepartment, setSelectedDepartment] = useState('');
 
     useEffect(() => {
-        const unsub = onSnapshot(collection(db, 'departments'), (snap) => {
-            const list = snap.docs.map(d => d.data().name).sort();
+        const fetchDepts = async () => {
+            const { data } = await supabase.from('departments').select('name').order('name', { ascending: true });
+            const list = (data || []).map(d => d.name);
             setDepartments(list);
             if (list.length > 0 && !selectedDepartment) setSelectedDepartment(list[0]);
-        });
-        return () => unsub();
+        };
+        fetchDepts();
+        const channel = supabase.channel('subjects_departments')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'departments' }, fetchDepts)
+            .subscribe();
+        return () => supabase.removeChannel(channel);
     }, []);
 
     // UI state
@@ -44,18 +48,7 @@ export default function ManageSubjects({ navigation }) {
             const data = await getAllCurriculumSubjects(selectedDepartment);
             if (!isMounted) return;
 
-            // Optional: fallback to mock data if empty during dev
-            if (data.length === 0) {
-                setSubjects([
-                    { id: 1, name: 'Data Structures', code: 'CS101', credits: '4', semester: 'Sem 1', icon: 'console' },
-                    { id: 2, name: 'Calculus II', code: 'MATH202', credits: '3', semester: 'Sem 1', icon: 'function-variant' },
-                    { id: 3, name: 'Digital Logic', code: 'EE105', credits: '4', semester: 'Sem 1', icon: 'memory' },
-                    { id: 4, name: 'Professional Ethics', code: 'HS102', credits: '2', semester: 'Sem 1', icon: 'brain' },
-                    { id: 5, name: 'Operating Systems', code: 'CS402', credits: '4', semester: 'Sem 4', icon: 'monitor' }
-                ]);
-            } else {
-                setSubjects(data);
-            }
+            setSubjects(data || []);
             setLoading(false);
         };
         fetchSubjects();

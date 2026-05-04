@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, Dimen
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getFacultyCourses, assignCourseToFaculty, removeCourseFromFaculty, getAllCurriculumSubjects } from '../../services/firestoreService';
+import { getFacultyCourses, assignCourseToFaculty, removeCourseFromFaculty, getAllCurriculumSubjects } from '../../services/supabaseService';
 
 export default function AssignFacultySubject({ route, navigation }) {
     const { faculty } = route.params || {};

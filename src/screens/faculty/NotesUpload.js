@@ -3,10 +3,9 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, 
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { AuthContext } from '../../context/AuthContext';
-import { storage } from '../../services/firebaseConfig';
-import { getUserProfile, getFacultyCourses, saveNoteMaterial } from '../../services/firestoreService';
+import { supabase } from '../../services/supabaseClient';
+import { getUserProfile, getFacultyCourses, saveNoteMaterial } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -26,7 +25,7 @@ export default function NotesUpload({ navigation }) {
     useEffect(() => {
         const init = async () => {
             try {
-                const facultyId = user?.uid;
+                const facultyId = user?.id;
                 if (!facultyId) { setLoading(false); return; }
                 const profileData = await getUserProfile(facultyId);
                 setProfile(profileData);
@@ -82,10 +81,22 @@ export default function NotesUpload({ navigation }) {
             if (file.uri) {
                 const response = await fetch(file.uri);
                 const blob = await response.blob();
+                const arrayBuffer = await new Response(blob).arrayBuffer();
+                const uint8 = new Uint8Array(arrayBuffer);
                 
-                const fileRef = ref(storage, `study_materials/${Date.now()}_${file.name}`);
-                await uploadBytesResumable(fileRef, blob);
-                downloadUrl = await getDownloadURL(fileRef);
+                const filePath = `${Date.now()}_${file.name}`;
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('study-materials')
+                    .upload(filePath, uint8, {
+                        contentType: file.mimeType || 'application/octet-stream',
+                        upsert: false,
+                    });
+                if (uploadError) throw uploadError;
+                
+                const { data: urlData } = supabase.storage
+                    .from('study-materials')
+                    .getPublicUrl(filePath);
+                downloadUrl = urlData?.publicUrl || file.uri;
             }
         } catch (error) {
             console.error("Error uploading file to storage:", error);
@@ -97,7 +108,7 @@ export default function NotesUpload({ navigation }) {
         const selectedSubject = subjects.find(s => s.code === subject || s.name === subject);
 
         const noteData = {
-            facultyId: user?.uid || '',
+            facultyId: user?.id || '',
             facultyName: profile?.name || 'Faculty',
             department: profile?.department || 'Computer Science',
             semester: selectedSubject?.semester || 'All',

@@ -25,6 +25,9 @@ import NotesScreen from '../screens/student/Notes';
 import ChatList from '../screens/common/ChatList';
 import ChatRoom from '../screens/common/ChatRoom';
 import NewChat from '../screens/common/NewChat';
+import PrivacySettings from '../screens/common/PrivacySettings';
+import HelpCenter from '../screens/common/HelpCenter';
+import TermsOfService from '../screens/common/TermsOfService';
 
 // Placeholders for other student screens
 const PlaceholderScreen = ({ route }) => (
@@ -104,6 +107,9 @@ export default function StudentNavigator() {
             <Stack.Screen name="ChatList" component={ChatList} />
             <Stack.Screen name="ChatRoom" component={ChatRoom} />
             <Stack.Screen name="NewChat" component={NewChat} />
+            <Stack.Screen name="PrivacySettings" component={PrivacySettings} />
+            <Stack.Screen name="HelpCenter" component={HelpCenter} />
+            <Stack.Screen name="TermsOfService" component={TermsOfService} />
 
             {/* Note: If Placements/Events/Settings need detail screens, add them here */}
         </Stack.Navigator>

@@ -4,7 +4,7 @@ import { Text, ActivityIndicator } from 'react-native-paper';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '../../context/AuthContext';
-import { createNotification, getUserProfile } from '../../services/firestoreService';
+import { createNotification, getUserProfile } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -33,7 +33,7 @@ export default function SendNotification({ navigation }) {
 
         setSending(true);
         try {
-            const profile = await getUserProfile(user?.uid);
+            const profile = await getUserProfile(user?.id);
             const result = await createNotification({
                 title: title.trim(),
                 body: body.trim(),
@@ -43,7 +43,7 @@ export default function SendNotification({ navigation }) {
                 iconColor: selectedCategory.color,
                 sentBy: profile?.name || 'Staff',
                 sentByRole: profile?.role || 'admin',
-                sentByUid: user?.uid || '',
+                sentByUid: user?.id || '',
             });
 
             setSending(false);

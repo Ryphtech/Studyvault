@@ -3,8 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Dimen
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, getDocs, query, orderBy } from 'firebase/firestore';
-import { db } from '../../services/firebaseConfig';
+import { supabase } from '../../services/supabaseClient';
 
 const { width } = Dimensions.get('window');
 
@@ -30,13 +29,16 @@ export default function ManageDepartments({ navigation }) {
 
     // Subscribe to departments
     useEffect(() => {
-        const unsub = onSnapshot(collection(db, 'departments'), (snap) => {
-            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-            setDepartments(list);
+        const fetchDepts = async () => {
+            const { data } = await supabase.from('departments').select('*').order('name', { ascending: true });
+            setDepartments(data || []);
             setLoading(false);
-        });
-        return () => unsub();
+        };
+        fetchDepts();
+        const channel = supabase.channel('departments')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'departments' }, fetchDepts)
+            .subscribe();
+        return () => supabase.removeChannel(channel);
     }, []);
 
     const handleAdd = async () => {
@@ -53,12 +55,12 @@ export default function ManageDepartments({ navigation }) {
 
         setSaving(true);
         try {
-            const docId = deptName.trim().replace(/\s+/g, '_');
-            await setDoc(doc(db, 'departments', docId), {
+            const { error } = await supabase.from('departments').insert({
                 name: deptName.trim(),
                 code: deptCode.trim().toUpperCase() || deptName.trim().substring(0, 3).toUpperCase(),
-                createdAt: new Date().toISOString(),
+                created_at: new Date().toISOString(),
             });
+            if (error) throw error;
             Alert.alert('Added!', `${deptName.trim()} department created.`);
             setDeptName('');
             setDeptCode('');
@@ -76,7 +78,8 @@ export default function ManageDepartments({ navigation }) {
             { text: 'Cancel', style: 'cancel' },
             { text: 'Delete', style: 'destructive', onPress: async () => {
                 try {
-                    await deleteDoc(doc(db, 'departments', dept.id));
+                    const { error } = await supabase.from('departments').delete().eq('id', dept.id);
+                    if (error) throw error;
                 } catch (e) {
                     Alert.alert('Error', 'Failed to delete department.');
                 }

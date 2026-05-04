@@ -13,7 +13,7 @@ import {
     assignCourseToFaculty,
     removeCourseFromFaculty,
     seedCSCurriculum
-} from '../../services/firestoreService';
+} from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 const SEMESTERS = ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5', 'Sem 6', 'Sem 7', 'Sem 8'];
@@ -45,7 +45,7 @@ export default function HODAssignSubjects({ navigation }) {
     useEffect(() => {
         const init = async () => {
             try {
-                const profile = await getUserProfile(user?.uid);
+                const profile = await getUserProfile(user?.id);
                 const dept = profile?.department || 'Computer Science';
                 setDepartment(dept);
                 const subj = await getAllCurriculumSubjects(dept);

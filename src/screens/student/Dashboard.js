@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshCont
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { AuthContext } from '../../context/AuthContext';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import { getStudentDashboardStats, getRecentJobs, getUpcomingEvents, subscribeToNotifications, subscribeToStudentMarks } from '../../services/firestoreService';
+import { getStudentDashboardStats, getRecentJobs, getUpcomingEvents, subscribeToNotifications, subscribeToStudentMarks } from '../../services/supabaseService';
 import { LineChart } from 'react-native-chart-kit';
 
 const { width } = Dimensions.get('window');
@@ -43,7 +43,7 @@ export default function StudentDashboard({ navigation }) {
 
     const fetchData = async () => {
         try {
-            const studentId = user?.uid || 'student_demo';
+            const studentId = user?.id || 'student_demo';
 
             const statsData = await getStudentDashboardStats(studentId);
             const jobsData = await getRecentJobs(1);
@@ -92,7 +92,7 @@ export default function StudentDashboard({ navigation }) {
 
     // Subscribe to real-time marks data for the performance chart
     useEffect(() => {
-        const studentId = user?.uid;
+        const studentId = user?.id;
         if (!studentId) return;
 
         const unsubscribe = subscribeToStudentMarks(studentId, (marks) => {
@@ -135,7 +135,7 @@ export default function StudentDashboard({ navigation }) {
         });
 
         return () => unsubscribe();
-    }, [user?.uid]);
+    }, [user?.id]);
 
     if (loading) {
         return (

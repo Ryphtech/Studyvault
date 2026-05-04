@@ -4,7 +4,7 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
-import { getDriveById, getUserProfile, applyForDrive } from '../../services/firestoreService';
+import { getDriveById, getUserProfile, applyForDrive } from '../../services/supabaseService';
 import { AuthContext } from '../../context/AuthContext';
 
 export default function ApplyDrive({ route, navigation }) {
@@ -47,13 +47,13 @@ export default function ApplyDrive({ route, navigation }) {
 
     useEffect(() => {
         const loadScreenData = async () => {
-            if (!driveId || !user?.uid) return;
+            if (!driveId || !user?.id) return;
 
             try {
                 // Fetch drive and user data in parallel
                 const [drive, profile] = await Promise.all([
                     getDriveById(driveId),
-                    getUserProfile(user.uid)
+                    getUserProfile(user.id)
                 ]);
 
                 setDriveData(drive);
@@ -66,7 +66,7 @@ export default function ApplyDrive({ route, navigation }) {
         };
 
         loadScreenData();
-    }, [driveId, user?.uid]);
+    }, [driveId, user?.id]);
 
     const handleSubmit = async () => {
         if (!selectedFile) {
@@ -82,7 +82,7 @@ export default function ApplyDrive({ route, navigation }) {
             // For now, we just save the name to show it's "attached".
         };
 
-        const result = await applyForDrive(driveId, user.uid, applicationData);
+        const result = await applyForDrive(driveId, user.id, applicationData);
         setSubmitting(false);
 
         if (result.success) {

@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshCont
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getActiveDrives, getStudentApplications } from '../../services/firestoreService';
+import { getActiveDrives, getStudentApplications } from '../../services/supabaseService';
 import { AuthContext } from '../../context/AuthContext';
 
 const { width } = Dimensions.get('window');
@@ -27,8 +27,8 @@ export default function PlacementsScreen({ navigation }) {
                 setHeroDrive(data[0]);
             }
 
-            if (user?.uid) {
-                const applications = await getStudentApplications(user.uid);
+            if (user?.id) {
+                const applications = await getStudentApplications(user.id);
                 const appliedIds = applications.map(app => app.driveId);
                 setAppliedDriveIds(appliedIds);
             }
@@ -47,7 +47,7 @@ export default function PlacementsScreen({ navigation }) {
         });
 
         return unsubscribe;
-    }, [navigation, user?.uid]);
+    }, [navigation, user?.id]);
 
     const onRefresh = () => {
         setRefreshing(true);

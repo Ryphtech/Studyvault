@@ -4,9 +4,8 @@ import { Text, ActivityIndicator } from 'react-native-paper';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '../../context/AuthContext';
-import { getUserProfile } from '../../services/firestoreService';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '../../services/firebaseConfig';
+import { getUserProfile } from '../../services/supabaseService';
+import { supabase } from '../../services/supabaseClient';
 
 const { width } = Dimensions.get('window');
 const SEMESTERS = ['All', '1', '2', '3', '4', '5', '6', '7', '8'];
@@ -35,20 +34,32 @@ export default function NotesScreen({ navigation }) {
     useEffect(() => {
         const loadData = async () => {
             try {
-                if (!user?.uid) return;
-                const profile = await getUserProfile(user.uid);
+                if (!user?.id) return;
+                const profile = await getUserProfile(user.id);
                 const dept = profile?.department || 'Computer Science';
                 setDepartment(dept);
 
                 // Fetch all notes for this department
-                const q = query(
-                    collection(db, 'notes'),
-                    where('department', '==', dept)
-                );
-                const snap = await getDocs(q);
-                const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                // Sort by upload date descending
-                list.sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''));
+                const { data, error } = await supabase
+                    .from('notes')
+                    .select('*')
+                    .eq('department', dept)
+                    .order('uploaded_at', { ascending: false });
+                
+                const list = (data || []).map(d => ({
+                    id: d.id,
+                    title: d.title,
+                    description: d.description,
+                    fileUri: d.file_url,
+                    fileName: d.file_name,
+                    materialType: d.file_type,
+                    department: d.department,
+                    semester: d.semester,
+                    subjectCode: d.subject,
+                    subjectName: d.title,
+                    facultyName: d.faculty_name,
+                    uploadedAt: d.uploaded_at,
+                }));
                 setNotes(list);
             } catch (error) {
                 console.error("Error loading notes:", error);
@@ -73,6 +84,15 @@ export default function NotesScreen({ navigation }) {
             });
         } else {
             Alert.alert("Info", "File preview is not available. The file metadata has been recorded.");
+        }
+    };
+
+    const handleDownload = (note) => {
+        if (note.fileUri) {
+            const url = note.fileUri.includes('?') ? `${note.fileUri}&download=` : `${note.fileUri}?download=`;
+            Linking.openURL(url).catch(() => {
+                Alert.alert("Error", "Could not initiate download.");
+            });
         }
     };
 
@@ -180,9 +200,14 @@ export default function NotesScreen({ navigation }) {
 
                                     {/* File info */}
                                     <View style={styles.fileRow}>
-                                        <MaterialCommunityIcons name="file-document-outline" size={14} color="#94a3b8" />
-                                        <Text style={styles.fileName} numberOfLines={1}>{item.fileName}</Text>
-                                        {item.fileSize ? <Text style={styles.fileSize}>{formatSize(item.fileSize)}</Text> : null}
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                                            <MaterialCommunityIcons name="file-document-outline" size={14} color="#94a3b8" />
+                                            <Text style={styles.fileName} numberOfLines={1}>{item.fileName}</Text>
+                                            {item.fileSize ? <Text style={styles.fileSize}>{formatSize(item.fileSize)}</Text> : null}
+                                        </View>
+                                        <TouchableOpacity style={styles.downloadBtn} onPress={() => handleDownload(item)}>
+                                            <MaterialCommunityIcons name="download" size={18} color="#0055ff" />
+                                        </TouchableOpacity>
                                     </View>
 
                                     {/* Meta */}
@@ -265,6 +290,7 @@ const styles = StyleSheet.create({
     fileRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#f8fafc', borderRadius: 8, padding: 8, paddingHorizontal: 10 },
     fileName: { flex: 1, fontSize: 12, fontWeight: '600', color: '#475569' },
     fileSize: { fontSize: 11, fontWeight: '600', color: '#94a3b8' },
+    downloadBtn: { padding: 4, paddingHorizontal: 6, backgroundColor: '#eff6ff', borderRadius: 6 },
 
     metaRow: { flexDirection: 'row', gap: 14, marginTop: 10 },
     metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },

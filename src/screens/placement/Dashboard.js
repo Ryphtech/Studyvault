@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl }
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { AuthContext } from '../../context/AuthContext';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import { subscribeToActiveDrives, subscribeToPlacedStudents, getUserProfile } from '../../services/firestoreService';
+import { subscribeToActiveDrives, subscribeToPlacedStudents, getUserProfile } from '../../services/supabaseService';
 
 export default function PlacementDashboard({ navigation }) {
     const { user, logout } = useContext(AuthContext);
@@ -14,8 +14,8 @@ export default function PlacementDashboard({ navigation }) {
 
     useEffect(() => {
         const loadName = async () => {
-            if (user?.uid) {
-                const profile = await getUserProfile(user.uid);
+            if (user?.id) {
+                const profile = await getUserProfile(user.id);
                 if (profile?.name) setOfficerName(profile.name.split(' ')[0]);
             }
         };

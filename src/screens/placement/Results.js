@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, Image, ActivityIndicator } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getPlacedStudents } from '../../services/firestoreService';
+import { getPlacedStudents } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 

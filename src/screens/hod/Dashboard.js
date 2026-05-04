@@ -1,10 +1,10 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, RefreshControl } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, RefreshControl, Alert } from 'react-native';
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { AuthContext } from '../../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getUserProfile, getDepartmentStats, subscribeToDepartmentCourses } from '../../services/firestoreService';
+import { getUserProfile, getDepartmentStats, subscribeToDepartmentCourses, seedCSCurriculum } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -15,10 +15,11 @@ export default function HODDashboard({ navigation }) {
     const [profile, setProfile] = useState(null);
     const [stats, setStats] = useState({ totalFaculty: 0, totalStudents: 0, assignedCourses: 0, totalSubjects: 0 });
     const [recentAssignments, setRecentAssignments] = useState([]);
+    const [isSeeding, setIsSeeding] = useState(false);
 
     const fetchData = async () => {
         try {
-            const profileData = await getUserProfile(user?.uid);
+            const profileData = await getUserProfile(user?.id);
             setProfile(profileData);
 
             if (profileData?.department) {
@@ -51,6 +52,30 @@ export default function HODDashboard({ navigation }) {
         fetchData();
     };
 
+    const handleSeedCS = async () => {
+        Alert.alert(
+            "Seed CS Curriculum",
+            "This will add all 8 semesters of CS subjects to the database. Proceed?",
+            [
+                { text: "Cancel", style: "cancel" },
+                { 
+                    text: "Seed Data", 
+                    onPress: async () => {
+                        setIsSeeding(true);
+                        const result = await seedCSCurriculum(profile?.department || 'Computer Science');
+                        setIsSeeding(false);
+                        if(result && result.success) {
+                            Alert.alert("Success", "CS Curriculum seeded smoothly!");
+                            onRefresh();
+                        } else {
+                            Alert.alert("Error", "Failed to seed curriculum data.");
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     if (loading) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -69,7 +94,6 @@ export default function HODDashboard({ navigation }) {
         { icon: 'chat-processing-outline', label: 'Chat\nMessages', screen: 'ChatList', color: '#14b8a6', bgColor: '#ccfbf1' },
         { icon: 'calendar-clock', label: 'Set\nTimetable', screen: 'ManageSchedules', color: '#d97706', bgColor: '#fffbeb' },
         { icon: 'clipboard-check-outline', label: 'Manage\nFeedback', screen: 'ManageFeedback', color: '#e11d48', bgColor: '#fff1f2' },
-        { icon: 'bookshelf', label: 'View\nCurriculum', screen: 'DeptCurriculum', color: '#8b5cf6', bgColor: '#f5f3ff' },
         { icon: 'bell-outline', label: 'Notifications', screen: 'Notifications', color: '#0284c7', bgColor: '#f0f9ff' },
         { icon: 'send', label: 'Send\nNotification', screen: 'SendNotification', color: '#ef4444', bgColor: '#fef2f2' },
         { icon: 'cog', label: 'Settings', screen: 'Settings', color: '#6366f1', bgColor: '#f5f3ff' },
@@ -210,6 +234,24 @@ export default function HODDashboard({ navigation }) {
                     </View>
                 )}
 
+                {/* Optional Action for Seeding CS DB */}
+                {department === 'Computer Science and Engineering' && (
+                    <TouchableOpacity 
+                        style={[styles.seedButton, { opacity: isSeeding ? 0.6 : 1 } ]} 
+                        onPress={handleSeedCS}
+                        disabled={isSeeding}
+                    >
+                        {isSeeding ? (
+                            <ActivityIndicator color="white" size="small" />
+                        ) : (
+                            <>
+                                <MaterialCommunityIcons name="database-arrow-up" size={20} color="white" />
+                                <Text style={styles.seedButtonText}>Seed CS Subjects</Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+                )}
+
                 <View style={{ height: 40 }} />
             </ScrollView>
         </View>
@@ -278,4 +320,26 @@ const styles = StyleSheet.create({
     emptyState: { alignItems: 'center', paddingVertical: 40 },
     emptyTitle: { fontSize: 16, fontWeight: '700', color: '#94a3b8', marginTop: 12 },
     emptySubtitle: { fontSize: 13, color: '#cbd5e1', marginTop: 4 },
+
+    seedButton: {
+        marginTop: 20,
+        backgroundColor: '#6366f1',
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        shadowColor: '#6366f1',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4
+    },
+    seedButtonText: {
+        color: 'white',
+        fontSize: 15,
+        fontWeight: '700'
+    }
 });

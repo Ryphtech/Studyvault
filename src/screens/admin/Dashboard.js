@@ -4,7 +4,7 @@ import { Text, ActivityIndicator } from 'react-native-paper';
 import { AuthContext } from '../../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { subscribeToAdminStats, getUserProfile } from '../../services/firestoreService';
+import { subscribeToAdminStats, getUserProfile } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -16,8 +16,8 @@ export default function AdminDashboard({ navigation }) {
 
     useEffect(() => {
         const loadName = async () => {
-            if (user?.uid) {
-                const profile = await getUserProfile(user.uid);
+            if (user?.id) {
+                const profile = await getUserProfile(user.id);
                 if (profile?.name) setAdminName(profile.name.split(' ')[0]);
             }
         };

@@ -1,25 +1,34 @@
-import { collection, doc, query, where, orderBy, onSnapshot, addDoc, setDoc, updateDoc, getDoc, getDocs, serverTimestamp, limit } from 'firebase/firestore';
-import { db } from './firebaseConfig';
+import { supabase } from './supabaseClient';
 
 /**
- * ─── MESSAGING LOGIC ───
+ * ─── MESSAGING LOGIC (Supabase Realtime) ───
  */
 
 /** Subscribe to direct chats for a user */
 export const subscribeToDirectChats = (userId, callback) => {
-    const q = query(
-        collection(db, 'chats'),
-        where('type', '==', 'direct'),
-        where('participants', 'array-contains', userId),
-        orderBy('updatedAt', 'desc')
-    );
-    return onSnapshot(q, (snapshot) => {
-        const chats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        callback(chats);
-    }, (error) => {
-        console.error("Error subscribing to direct chats:", error);
-        callback([]);
-    });
+    const fetchChats = async () => {
+        const { data } = await supabase
+            .from('chats')
+            .select('*')
+            .eq('type', 'direct')
+            .contains('participants', [userId])
+            .order('updated_at', { ascending: false });
+        const mappedData = (data || []).map(c => ({
+            ...c,
+            participantNames: c.participant_names,
+            updatedAt: c.updated_at,
+            lastMessage: c.last_message,
+        }));
+        callback(mappedData);
+    };
+    fetchChats();
+
+    const channelName = `direct_chats_${userId}_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+    const channel = supabase.channel(channelName)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, fetchChats)
+        .subscribe();
+
+    return () => supabase.removeChannel(channel);
 };
 
 /** Subscribe to group chats based on course codes */
@@ -28,84 +37,122 @@ export const subscribeToGroupChats = (courseCodes, callback) => {
         callback([]);
         return () => {};
     }
-    const q = query(
-        collection(db, 'chats'),
-        where('type', '==', 'group'),
-        where('courseCode', 'in', courseCodes)
-    );
-    return onSnapshot(q, (snapshot) => {
-        const chats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        callback(chats);
-    }, (error) => {
-        console.error("Error subscribing to group chats:", error);
-        callback([]);
-    });
+
+    const fetchChats = async () => {
+        const { data } = await supabase
+            .from('chats')
+            .select('*')
+            .eq('type', 'group')
+            .in('course_code', courseCodes);
+        callback((data || []).map(c => ({
+            ...c,
+            courseCode: c.course_code,
+            courseName: c.course_name,
+            lastMessage: c.last_message,
+            updatedAt: c.updated_at,
+            participantNames: c.participant_names,
+        })));
+    };
+    fetchChats();
+
+    const channelName = `group_chats_${courseCodes.join('_')}_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+    const channel = supabase.channel(channelName)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, fetchChats)
+        .subscribe();
+
+    return () => supabase.removeChannel(channel);
 };
 
 /** Subscribe to messages within a specific chat */
 export const subscribeToMessages = (chatId, callback) => {
-    const q = query(
-        collection(db, 'chats', chatId, 'messages'),
-        orderBy('createdAt', 'desc'),
-        limit(50) // Fetch latest 50 messages
-    );
-    return onSnapshot(q, (snapshot) => {
-        const msgs = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                _id: doc.id,
-                text: data.text,
-                createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
-                status: data.status || 'sent',
-                replyTo: data.replyTo || null,
-                user: {
-                    _id: data.senderId,
-                    name: data.senderName,
-                    role: data.senderRole || '',
-                    avatar: data.senderAvatar || null,
-                }
-            };
-        });
+    const fetchMessages = async () => {
+        const { data } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('chat_id', chatId)
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+        const msgs = (data || []).map(d => ({
+            _id: d.id,
+            text: d.text,
+            createdAt: d.created_at ? new Date(d.created_at) : new Date(),
+            status: d.status || 'sent',
+            replyTo: d.reply_to || null,
+            audioUrl: d.audio_url || null,
+            user: {
+                _id: d.sender_id,
+                name: d.sender_name,
+                role: d.sender_role || '',
+                avatar: d.sender_avatar || null,
+            }
+        }));
         callback(msgs);
-    }, (error) => {
-        console.error("Error subscribing to messages:", error);
-        callback([]);
-    });
+    };
+    fetchMessages();
+
+    const channelName = `messages_${chatId}_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+    const channel = supabase.channel(channelName)
+        .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `chat_id=eq.${chatId}`
+        }, fetchMessages)
+        .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'messages',
+            filter: `chat_id=eq.${chatId}`
+        }, fetchMessages)
+        .on('postgres_changes', {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'messages',
+            filter: `chat_id=eq.${chatId}`
+        }, fetchMessages)
+        .subscribe();
+
+    return () => supabase.removeChannel(channel);
 };
 
-/** Send a text message */
-export const sendMessage = async (chatId, senderId, senderName, senderRole, senderAvatar, text, replyTo = null) => {
+/** Send a text or audio message */
+export const sendMessage = async (chatId, senderId, senderName, senderRole, senderAvatar, text, replyTo = null, audioUrl = null) => {
     try {
-        const chatRef = doc(db, 'chats', chatId);
-        
-        // Ensure chat document exists for groups if it hasn't been created yet
-        const chatSnap = await getDoc(chatRef);
-        if (!chatSnap.exists()) {
-            console.log("Chat doc doesn't exist, this should only happen for new group chats.");
-            // Group chats should be created via startGroupChat, but we'll allow it if needed
-        }
-
-        // Add message to subcollection
         const msgData = {
+            chat_id: chatId,
             text: text,
-            senderId: senderId,
-            senderName: senderName,
-            senderRole: senderRole || '',
-            senderAvatar: senderAvatar || '',
-            createdAt: serverTimestamp(),
-            status: 'sent'
+            sender_id: senderId,
+            sender_name: senderName,
+            sender_role: senderRole || '',
+            sender_avatar: senderAvatar || '',
+            status: 'sent',
+            created_at: new Date().toISOString(),
         };
         if (replyTo) {
-            msgData.replyTo = replyTo;
+            msgData.reply_to = replyTo;
         }
-        await addDoc(collection(chatRef, 'messages'), msgData);
+        if (audioUrl) {
+            msgData.audio_url = audioUrl;
+        }
+
+        const { error: msgError } = await supabase.from('messages').insert(msgData);
+        if (msgError) throw msgError;
 
         // Update chat metadata
-        await updateDoc(chatRef, {
-            lastMessage: text,
-            updatedAt: serverTimestamp(),
-            [`participantNames.${senderId}`]: senderName
-        });
+        const participantUpdate = {};
+        participantUpdate[senderId] = senderName;
+
+        const { data: existingChat } = await supabase.from('chats').select('participant_names').eq('id', chatId).single();
+        const updatedNames = { ...(existingChat?.participant_names || {}), ...participantUpdate };
+
+        const { error: chatError } = await supabase.from('chats').update({
+            last_message: audioUrl ? '🎤 Voice Message' : text,
+            updated_at: new Date().toISOString(),
+            participant_names: updatedNames
+        }).eq('id', chatId);
+        if (chatError) throw chatError;
+
         return { success: true };
     } catch (error) {
         console.error("Error sending message:", error);
@@ -117,12 +164,11 @@ export const sendMessage = async (chatId, senderId, senderName, senderRole, send
 export const markMessagesAsSeen = async (chatId, messageIds) => {
     if (!messageIds || messageIds.length === 0) return;
     try {
-        const promises = messageIds.map(id => 
-            updateDoc(doc(db, 'chats', chatId, 'messages', id), {
-                status: 'seen'
-            })
-        );
-        await Promise.all(promises);
+        const { error } = await supabase
+            .from('messages')
+            .update({ status: 'seen' })
+            .in('id', messageIds);
+        if (error) throw error;
     } catch (error) {
         console.error("Error marking messages as seen:", error);
     }
@@ -133,17 +179,19 @@ export const startDirectChat = async (uid1, uid2, name1, name2) => {
     if (!uid1 || !uid2) return;
     try {
         const chatId = [uid1, uid2].sort().join('_');
-        const chatRef = doc(db, 'chats', chatId);
-        const chatSnap = await getDoc(chatRef);
 
-        if (!chatSnap.exists()) {
-            await setDoc(chatRef, {
+        const { data: existing } = await supabase.from('chats').select('id').eq('id', chatId).single();
+
+        if (!existing) {
+            const { error } = await supabase.from('chats').insert({
+                id: chatId,
                 type: 'direct',
                 participants: [uid1, uid2],
-                participantNames: { [uid1]: name1, [uid2]: name2 }, // Store both names for easy UI rendering
-                lastMessage: '',
-                updatedAt: serverTimestamp()
+                participant_names: { [uid1]: name1, [uid2]: name2 },
+                last_message: '',
+                updated_at: new Date().toISOString(),
             });
+            if (error) throw error;
         }
         return { success: true, chatId: chatId };
     } catch (error) {
@@ -157,21 +205,86 @@ export const startGroupChat = async (courseCode, courseName) => {
     if (!courseCode) return;
     try {
         const chatId = `group_${courseCode}`;
-        const chatRef = doc(db, 'chats', chatId);
-        const chatSnap = await getDoc(chatRef);
 
-        if (!chatSnap.exists()) {
-            await setDoc(chatRef, {
+        const { data: existing } = await supabase.from('chats').select('id').eq('id', chatId).single();
+
+        if (!existing) {
+            const { error } = await supabase.from('chats').insert({
+                id: chatId,
                 type: 'group',
-                courseCode: courseCode,
-                courseName: courseName,
-                lastMessage: 'Chat room created.',
-                updatedAt: serverTimestamp()
+                course_code: courseCode,
+                course_name: courseName,
+                last_message: 'Chat room created.',
+                updated_at: new Date().toISOString(),
             });
+            if (error) throw error;
         }
         return { success: true, chatId: chatId };
     } catch (error) {
         console.error("Error starting group chat:", error);
+        return { success: false, error: error.message };
+    }
+};
+
+/** Edit a message's text */
+export const editMessage = async (messageId, newText) => {
+    try {
+        const { error } = await supabase
+            .from('messages')
+            .update({ text: newText })
+            .eq('id', messageId);
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error("Error editing message:", error);
+        return { success: false, error: error.message };
+    }
+};
+
+/** Delete a message */
+export const deleteMessage = async (messageId, chatId) => {
+    try {
+        const { error } = await supabase
+            .from('messages')
+            .delete()
+            .eq('id', messageId);
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error("Error deleting message:", error);
+        return { success: false, error: error.message };
+    }
+};
+
+/** Forward a message to another chat */
+export const forwardMessage = async (targetChatId, senderId, senderName, senderRole, originalText, audioUrl = null) => {
+    try {
+        const fwdPrefix = '⤳ Forwarded\n';
+        const text = originalText ? fwdPrefix + originalText : (audioUrl ? fwdPrefix + '🎤 Voice Message' : fwdPrefix);
+
+        const msgData = {
+            chat_id: targetChatId,
+            text: text,
+            sender_id: senderId,
+            sender_name: senderName,
+            sender_role: senderRole || '',
+            sender_avatar: '',
+            status: 'sent',
+            created_at: new Date().toISOString(),
+        };
+        if (audioUrl) msgData.audio_url = audioUrl;
+
+        const { error: msgError } = await supabase.from('messages').insert(msgData);
+        if (msgError) throw msgError;
+
+        await supabase.from('chats').update({
+            last_message: audioUrl ? '⤳ 🎤 Voice Message' : (originalText ? `⤳ ${originalText.substring(0, 50)}` : '⤳ Forwarded'),
+            updated_at: new Date().toISOString(),
+        }).eq('id', targetChatId);
+
+        return { success: true };
+    } catch (error) {
+        console.error("Error forwarding message:", error);
         return { success: false, error: error.message };
     }
 };

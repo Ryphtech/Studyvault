@@ -1,11 +1,10 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Switch, Dimensions, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Switch, Dimensions, Alert, Modal, TextInput } from 'react-native';
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../services/firebaseConfig';
+import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../context/AuthContext';
-import { getUserProfile, seedInitialData, removeSeedData, seedAllCurriculumData, seedFeedbackData, seedNotificationData } from '../../services/firestoreService';
+import { getUserProfile, seedInitialData, removeSeedData, seedAllCurriculumData, seedFeedbackData, seedNotificationData } from '../../services/supabaseService';
 
 export default function SettingsScreen({ navigation }) {
     const { user, logout } = useContext(AuthContext);
@@ -14,8 +13,8 @@ export default function SettingsScreen({ navigation }) {
 
     useEffect(() => {
         const fetchProfile = async () => {
-            if (user?.uid) {
-                const data = await getUserProfile(user.uid);
+            if (user?.id) {
+                const data = await getUserProfile(user.id);
                 setProfile(data);
             }
             setLoadingProfile(false);
@@ -29,6 +28,9 @@ export default function SettingsScreen({ navigation }) {
     const [seeding, setSeeding] = useState(false);
     const [showSemesterPicker, setShowSemesterPicker] = useState(false);
     const [updatingSemester, setUpdatingSemester] = useState(false);
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [passwords, setPasswords] = useState({ current: '', newPass: '', confirm: '' });
+    const [changingPassword, setChangingPassword] = useState(false);
 
     const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8].map(s => ({ label: `Semester ${s}`, value: s }));
 
@@ -37,7 +39,8 @@ export default function SettingsScreen({ navigation }) {
         if (profile?.semester === newSemester) return;
         setUpdatingSemester(true);
         try {
-            await updateDoc(doc(db, 'users', user.uid), { semester: newSemester });
+            const { error } = await supabase.from('profiles').update({ semester: newSemester }).eq('id', user.id);
+            if (error) throw error;
             setProfile(prev => ({ ...prev, semester: newSemester }));
             Alert.alert("Success", "Semester updated successfully.");
         } catch (error) {
@@ -52,7 +55,7 @@ export default function SettingsScreen({ navigation }) {
 
     const handleSeedData = async () => {
         setSeeding(true);
-        const success = await seedInitialData(user?.uid);
+        const success = await seedInitialData(user?.id);
         setSeeding(false);
         if (success) {
             Alert.alert("Success", "Basic Database seeded successfully!");
@@ -111,7 +114,7 @@ export default function SettingsScreen({ navigation }) {
                     style: "destructive",
                     onPress: async () => {
                         setRemoving(true);
-                        const success = await removeSeedData(user?.uid);
+                        const success = await removeSeedData(user?.id);
                         setRemoving(false);
                         if (success) {
                             Alert.alert("Success", "Seeded data removed successfully!");
@@ -122,6 +125,34 @@ export default function SettingsScreen({ navigation }) {
                 }
             ]
         );
+    };
+
+    const handleChangePassword = async () => {
+        if (!passwords.newPass || !passwords.confirm) {
+            Alert.alert('Error', 'Please fill in all fields.');
+            return;
+        }
+        if (passwords.newPass.length < 6) {
+            Alert.alert('Error', 'New password must be at least 6 characters.');
+            return;
+        }
+        if (passwords.newPass !== passwords.confirm) {
+            Alert.alert('Error', 'New passwords do not match.');
+            return;
+        }
+        setChangingPassword(true);
+        try {
+            const { error } = await supabase.auth.updateUser({ password: passwords.newPass });
+            if (error) throw error;
+            setShowPasswordModal(false);
+            setPasswords({ current: '', newPass: '', confirm: '' });
+            Alert.alert('Success', 'Password changed successfully!');
+        } catch (error) {
+            console.error('Error changing password:', error);
+            Alert.alert('Error', error.message || 'Failed to change password.');
+        } finally {
+            setChangingPassword(false);
+        }
     };
 
     const renderSettingItem = ({ icon, color, label, showToggle, toggleValue, onToggle, showChevron = true, onPress, valueLabel }) => (
@@ -209,13 +240,15 @@ export default function SettingsScreen({ navigation }) {
                         {renderSettingItem({
                             icon: 'lock',
                             color: { bg: '#eff6ff', text: '#2563eb' },
-                            label: 'Change Password'
+                            label: 'Change Password',
+                            onPress: () => setShowPasswordModal(true)
                         })}
                         <View style={styles.divider} />
                         {renderSettingItem({
                             icon: 'shield-check',
                             color: { bg: '#ecfdf5', text: '#059669' },
-                            label: 'Privacy Settings'
+                            label: 'Privacy Settings',
+                            onPress: () => navigation.navigate('PrivacySettings')
                         })}
                         <View style={styles.divider} />
                         {renderSettingItem({
@@ -265,8 +298,7 @@ export default function SettingsScreen({ navigation }) {
                             icon: 'help-circle',
                             color: { bg: '#f0fdfa', text: '#0d9488' },
                             label: 'Help Center',
-                            showChevron: false,
-                            valueLabel: ' '
+                            onPress: () => navigation.navigate('HelpCenter')
                         })}
                         <View style={styles.divider} />
                         {renderSettingItem({
@@ -279,7 +311,8 @@ export default function SettingsScreen({ navigation }) {
                         {renderSettingItem({
                             icon: 'file-document',
                             color: { bg: '#f3f4f6', text: '#4b5563' },
-                            label: 'Terms of Service'
+                            label: 'Terms of Service',
+                            onPress: () => navigation.navigate('TermsOfService')
                         })}
                     </View>
                 </View>
@@ -358,6 +391,62 @@ export default function SettingsScreen({ navigation }) {
 
                 <View style={{ height: 40 }} />
 
+                {/* Change Password Modal */}
+                <Modal visible={showPasswordModal} transparent animationType="fade" onRequestClose={() => setShowPasswordModal(false)}>
+                    <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowPasswordModal(false)}>
+                        <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+                            <Text style={styles.modalTitle}>Change Password</Text>
+                            <View style={{ gap: 14 }}>
+                                <View>
+                                    <Text style={styles.modalLabel}>Current Password</Text>
+                                    <TextInput
+                                        style={styles.modalInput}
+                                        value={passwords.current}
+                                        onChangeText={t => setPasswords(p => ({ ...p, current: t }))}
+                                        placeholder="Enter current password"
+                                        placeholderTextColor="#9ca3af"
+                                        secureTextEntry
+                                    />
+                                </View>
+                                <View>
+                                    <Text style={styles.modalLabel}>New Password</Text>
+                                    <TextInput
+                                        style={styles.modalInput}
+                                        value={passwords.newPass}
+                                        onChangeText={t => setPasswords(p => ({ ...p, newPass: t }))}
+                                        placeholder="Min 6 characters"
+                                        placeholderTextColor="#9ca3af"
+                                        secureTextEntry
+                                    />
+                                </View>
+                                <View>
+                                    <Text style={styles.modalLabel}>Confirm New Password</Text>
+                                    <TextInput
+                                        style={styles.modalInput}
+                                        value={passwords.confirm}
+                                        onChangeText={t => setPasswords(p => ({ ...p, confirm: t }))}
+                                        placeholder="Re-enter new password"
+                                        placeholderTextColor="#9ca3af"
+                                        secureTextEntry
+                                    />
+                                </View>
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+                                <TouchableOpacity style={styles.modalCancelBtn} onPress={() => { setShowPasswordModal(false); setPasswords({ current: '', newPass: '', confirm: '' }); }}>
+                                    <Text style={styles.modalCancelText}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.modalSaveBtn} onPress={handleChangePassword} disabled={changingPassword}>
+                                    {changingPassword ? (
+                                        <ActivityIndicator size="small" color="white" />
+                                    ) : (
+                                        <Text style={styles.modalSaveText}>Update</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+                </Modal>
+
                 {/* Semester Picker Dialog */}
                 {showSemesterPicker && (
                     <View style={[StyleSheet.absoluteFill, { zIndex: 999 }]}>
@@ -428,5 +517,15 @@ const styles = StyleSheet.create({
     footer: { paddingVertical: 8, gap: 16 },
     logoutButton: { backgroundColor: 'white', paddingVertical: 16, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: '#fee2e2' },
     logoutText: { fontSize: 16, fontWeight: '600', color: '#ef4444' },
-    versionText: { textAlign: 'center', fontSize: 12, color: '#94a3b8' }
+    versionText: { textAlign: 'center', fontSize: 12, color: '#94a3b8' },
+
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 },
+    modalContent: { backgroundColor: 'white', borderRadius: 20, padding: 24, elevation: 10 },
+    modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#0f172a', marginBottom: 16 },
+    modalLabel: { fontSize: 13, fontWeight: '600', color: '#64748b', marginBottom: 6, marginLeft: 2 },
+    modalInput: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: '#0f172a' },
+    modalCancelBtn: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f6f8' },
+    modalCancelText: { fontSize: 15, fontWeight: '600', color: '#64748b' },
+    modalSaveBtn: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0055ff' },
+    modalSaveText: { fontSize: 15, fontWeight: 'bold', color: 'white' },
 });

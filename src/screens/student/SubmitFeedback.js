@@ -3,8 +3,8 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, Switch, Dime
 import { Text } from 'react-native-paper';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { submitFeedback } from '../../services/firestoreService';
-import { getAuth } from 'firebase/auth';
+import { submitFeedback } from '../../services/supabaseService';
+import { AuthContext } from '../../context/AuthContext';
 
 const { width } = Dimensions.get('window');
 
@@ -25,7 +25,7 @@ const RATINGS = [
 
 export default function SubmitFeedback({ navigation }) {
     const insets = useSafeAreaInsets();
-    const auth = getAuth();
+    const { user } = React.useContext(AuthContext);
 
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [rating, setRating] = useState(4); // Default to 'Good'
@@ -47,7 +47,7 @@ export default function SubmitFeedback({ navigation }) {
         setIsSubmitting(true);
 
         try {
-            const userId = auth.currentUser?.uid;
+            const userId = user?.id;
 
             const feedbackData = {
                 userId: isAnonymous ? 'Anonymous' : userId,

@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { AuthContext } from '../../context/AuthContext';
-import { getUserProfile, updateUserProfile } from '../../services/firestoreService';
+import { getUserProfile, updateUserProfile } from '../../services/supabaseService';
 
 export default function EditProfile({ navigation }) {
     const insets = useSafeAreaInsets();
@@ -31,21 +31,21 @@ export default function EditProfile({ navigation }) {
 
     useEffect(() => {
         const loadProfile = async () => {
-            if (user?.uid) {
-                const profile = await getUserProfile(user.uid);
+            if (user?.id) {
+                const profile = await getUserProfile(user.id);
                 if (profile) {
                     setProfileData({
                         fullName: profile.name || '',
-                        department: profile.department || profile.academicDetails?.department || '',
-                        cgpa: profile.cgpa || profile.academicDetails?.cgpa || '',
-                        semester: profile.semester || '',
-                        gradYear: profile.academicDetails?.expectedGraduation || '',
-                        dob: profile.personalDetails?.dob || '',
-                        gender: profile.personalDetails?.gender || '',
-                        bloodGroup: profile.personalDetails?.bloodGroup || '',
+                        department: profile.department || '',
+                        cgpa: profile.cgpa || '',
+                        semester: profile.semester ? String(profile.semester) : '',
+                        gradYear: profile.gradYear || '',
+                        dob: profile.dob || '',
+                        gender: profile.gender || '',
+                        bloodGroup: profile.bloodGroup || '',
                         email: profile.email || user.email || '',
-                        phone: profile.contactDetails?.phone || '',
-                        dorm: profile.contactDetails?.address || '',
+                        phone: profile.phone || '',
+                        dorm: profile.address || '',
                         profileImage: profile.profileImage || 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png'
                     });
                 }
@@ -79,33 +79,30 @@ export default function EditProfile({ navigation }) {
     };
 
     const handleSave = async () => {
-        if (!user?.uid) return;
+        if (!user?.id) return;
         setSaving(true);
+
+        // Only send flat columns that exist in the profiles table
+        // Sanitize numeric fields: empty strings → null, valid strings → numbers
+        const parsedSemester = profileData.semester ? parseInt(profileData.semester) : null;
+        const parsedCgpa = profileData.cgpa ? parseFloat(profileData.cgpa) : null;
 
         const updateData = {
             name: profileData.fullName,
             email: profileData.email,
-            department: profileData.department,
-            semester: profileData.semester,
-            cgpa: profileData.cgpa,
-            profileImage: profileData.profileImage,
-            academicDetails: {
-                department: profileData.department,
-                cgpa: profileData.cgpa,
-                expectedGraduation: profileData.gradYear
-            },
-            personalDetails: {
-                dob: profileData.dob,
-                gender: profileData.gender,
-                bloodGroup: profileData.bloodGroup
-            },
-            contactDetails: {
-                phone: profileData.phone,
-                address: profileData.dorm
-            }
+            department: profileData.department || null,
+            semester: isNaN(parsedSemester) ? null : parsedSemester,
+            cgpa: isNaN(parsedCgpa) ? null : parsedCgpa,
+            profileImage: profileData.profileImage || null,
+            dob: profileData.dob || null,
+            gender: profileData.gender || null,
+            bloodGroup: profileData.bloodGroup || null,
+            phone: profileData.phone || null,
+            address: profileData.dorm || null,
+            gradYear: profileData.gradYear || null,
         };
 
-        const success = await updateUserProfile(user.uid, updateData);
+        const success = await updateUserProfile(user.id, updateData);
         setSaving(false);
 
         if (success) {

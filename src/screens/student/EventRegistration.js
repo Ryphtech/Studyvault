@@ -5,7 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '../../context/AuthContext';
-import { getStudentDashboardStats, getUserProfile, saveEventRegistration } from '../../services/firestoreService';
+import { getStudentDashboardStats, getUserProfile, saveEventRegistration } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -32,7 +32,7 @@ export default function EventRegistration({ route, navigation }) {
     useEffect(() => {
         const fetchUserData = async () => {
             try {
-                const studentId = user?.uid || 'student_demo';
+                const studentId = user?.id || 'student_demo';
                 const statsData = await getStudentDashboardStats(studentId);
                 const profile = await getUserProfile(studentId);
                 setStats({
@@ -60,7 +60,7 @@ export default function EventRegistration({ route, navigation }) {
             const result = await saveEventRegistration({
                 eventId: event.id || '',
                 eventTitle: event.title || '',
-                studentId: user?.uid || 'student_demo',
+                studentId: user?.id || 'student_demo',
                 studentName: stats.name,
                 department: stats.department,
                 rollNo: stats.rollNo,

@@ -5,7 +5,7 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { createEvent } from '../../services/firestoreService';
+import { createEvent } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 

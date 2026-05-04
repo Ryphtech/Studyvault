@@ -4,7 +4,8 @@ import { Text, ActivityIndicator } from 'react-native-paper';
 import { AuthContext } from '../../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getFacultyCourses, getFacultyProfile } from '../../services/firestoreService';
+import { getFacultyCourses, getFacultyProfile } from '../../services/supabaseService';
+import { supabase } from '../../services/supabaseClient';
 
 const { width } = Dimensions.get('window');
 
@@ -12,11 +13,23 @@ export default function FacultyDashboard({ navigation }) {
     const { user, logout } = useContext(AuthContext);
     const [profile, setProfile] = useState(null);
     const [courses, setCourses] = useState([]);
+    const [todayClasses, setTodayClasses] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const PERIODS = [
+        { num: 1, time: '09:00 - 09:50' },
+        { num: 2, time: '09:50 - 10:40' },
+        { num: 3, time: '10:50 - 11:40' },
+        { num: 4, time: '11:40 - 12:30' },
+        { num: 5, time: '01:30 - 02:20' },
+        { num: 6, time: '02:20 - 03:10' },
+        { num: 7, time: '03:20 - 04:10' },
+    ];
 
     useEffect(() => {
         const fetchData = async () => {
-            const facultyId = user?.uid;
+            const facultyId = user?.id;
             if (!facultyId) {
                 setLoading(false);
                 return;
@@ -29,6 +42,33 @@ export default function FacultyDashboard({ navigation }) {
                 ]);
                 setProfile(profileData);
                 setCourses(coursesData);
+
+                // Fetch timetable entries for this faculty
+                const facultyName = profileData?.name;
+                if (facultyName) {
+                    const todayDay = DAYS[new Date().getDay()];
+                    const { data: timetables } = await supabase.from('timetables').select('*');
+                    const classes = [];
+                    (timetables || []).forEach(tt => {
+                        const schedule = tt.schedule || {};
+                        const daySlots = schedule[todayDay] || [];
+                        daySlots.forEach((slot, idx) => {
+                            if (slot.faculty && slot.subject && slot.faculty.toLowerCase() === facultyName.toLowerCase()) {
+                                classes.push({
+                                    subject: slot.subject,
+                                    faculty: slot.faculty,
+                                    room: slot.room || '',
+                                    period: idx + 1,
+                                    time: PERIODS[idx]?.time || '',
+                                    semester: tt.semester,
+                                    department: tt.department,
+                                });
+                            }
+                        });
+                    });
+                    classes.sort((a, b) => a.period - b.period);
+                    setTodayClasses(classes);
+                }
             } catch (error) {
                 console.error("Error fetching faculty data:", error);
             } finally {
@@ -39,9 +79,7 @@ export default function FacultyDashboard({ navigation }) {
         fetchData();
     }, [user]);
 
-    // Derived state for next class
-    const nextClass = courses.length > 0 && courses[0].schedule?.length > 0 ? courses[0].schedule[0] : null;
-    const nextCourse = courses.length > 0 ? courses[0] : null;
+    const nextClass = todayClasses.length > 0 ? todayClasses[0] : null;
 
     if (loading) {
         return (
@@ -87,20 +125,19 @@ export default function FacultyDashboard({ navigation }) {
                     <View style={styles.heroDecoration} />
 
                     <View style={styles.heroTop}>
-                        {nextClass && nextCourse ? (
+                        {nextClass ? (
                             <>
                                 <View style={styles.heroContent}>
                                     <View style={styles.nextClassBadge}>
                                         <MaterialCommunityIcons name="clock-outline" size={12} color="#fde047" />
-                                        <Text style={styles.nextClassText}>NEXT CLASS</Text>
+                                        <Text style={styles.nextClassText}>NEXT CLASS • Period {nextClass.period}</Text>
                                     </View>
-                                    <Text style={styles.heroTitle}>{nextCourse.name}</Text>
-                                    <Text style={styles.heroSubtitle}>{nextCourse.code} • {nextClass.room}</Text>
+                                    <Text style={styles.heroTitle}>{nextClass.subject}</Text>
+                                    <Text style={styles.heroSubtitle}>{nextClass.semester} • {nextClass.room || 'No room'}</Text>
                                 </View>
 
                                 <View style={styles.timeBadgeLarge}>
-                                    <Text style={styles.timeBadgeTime}>{nextClass.time.split(' ')[0]}</Text>
-                                    <Text style={styles.timeBadgeAmPm}>{nextClass.time.split(' ')[1]}</Text>
+                                    <Text style={styles.timeBadgeTime}>{nextClass.time.split(' - ')[0]}</Text>
                                 </View>
                             </>
                         ) : (
@@ -111,25 +148,28 @@ export default function FacultyDashboard({ navigation }) {
                         )}
                     </View>
 
-                    {nextCourse && (
+                    {courses.length > 0 && (
                         <View style={styles.studentsEnrolled}>
                             <View style={styles.avatarStack}>
                                 <View style={[styles.avatar, { backgroundColor: '#bfdbfe', zIndex: 3, marginLeft: 0 }]} />
                                 <View style={[styles.avatar, { backgroundColor: '#93c5fd', zIndex: 2, marginLeft: -10 }]} />
                                 <View style={[styles.avatar, { backgroundColor: '#60a5fa', zIndex: 1, marginLeft: -10 }]} />
                             </View>
-                            <Text style={styles.enrolledText}>{nextCourse.studentsEnrolled || 0} Students Enrolled</Text>
+                            <Text style={styles.enrolledText}>{todayClasses.length} Class{todayClasses.length !== 1 ? 'es' : ''} Today</Text>
                         </View>
                     )}
 
                     <View style={styles.actionButtons}>
-                        <TouchableOpacity style={styles.startClassButton}>
+                        <TouchableOpacity 
+                            style={styles.startClassButton}
+                            onPress={() => navigation.navigate('AttendanceManager', { courseId: nextClass?.subject || '', courseName: nextClass?.subject || '' })}
+                        >
                             <MaterialCommunityIcons name="play" size={20} color="#0055ff" />
-                            <Text style={styles.startClassText}>Start Class</Text>
+                            <Text style={styles.startClassText}>Take Attendance</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.attendanceButton, { backgroundColor: '#94a3b8' }]} disabled={true}>
                             <MaterialCommunityIcons name="qrcode-scan" size={20} color="white" />
-                            <Text style={styles.attendanceButtonText}>Coming Soon</Text>
+                            <Text style={styles.attendanceButtonText}>QR Scan</Text>
                         </TouchableOpacity>
                     </View>
                 </LinearGradient>
@@ -140,7 +180,7 @@ export default function FacultyDashboard({ navigation }) {
                 </View>
 
                 <View style={styles.quickActionsGrid}>
-                    <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('AttendanceManager')}>
+                    <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('AttendanceManager', { courseId: nextClass?.subject || '', courseName: nextClass?.subject || '' })}>
                         <View style={[styles.actionIconBox, { backgroundColor: '#eff6ff', color: '#0055ff' }]}>
                             <MaterialCommunityIcons name="playlist-check" size={24} color="#0055ff" />
                         </View>
@@ -200,28 +240,26 @@ export default function FacultyDashboard({ navigation }) {
                 </View>
 
                 <View style={styles.scheduleList}>
-                    {(courses || []).map((course, index) => (
-                        (course.schedule || []).map((slot, i) => (
-                            <View key={`${index}-${i}`} style={[styles.scheduleCard, styles.borderBlue]}>
-                                <View style={{ flex: 1 }}>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                        <View>
-                                            <Text style={styles.scheduleTitle}>{course.name}</Text>
-                                            <Text style={styles.scheduleSubtitle}>{course.code} • {slot.room}</Text>
-                                        </View>
-                                        <View style={[styles.statusTag, { backgroundColor: '#eff6ff', borderColor: '#dbeafe' }]}>
-                                            <Text style={[styles.statusText, { color: '#0055ff' }]}>{slot.day?.toUpperCase()}</Text>
-                                        </View>
+                    {todayClasses.map((cls, index) => (
+                        <View key={index} style={[styles.scheduleCard, styles.borderBlue]}>
+                            <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <View>
+                                        <Text style={styles.scheduleTitle}>{cls.subject}</Text>
+                                        <Text style={styles.scheduleSubtitle}>{cls.semester} • {cls.room || 'No room'}</Text>
                                     </View>
-                                    <View style={styles.scheduleTime}>
-                                        <MaterialCommunityIcons name="clock-outline" size={14} color="#5e6d8d" />
-                                        <Text style={styles.scheduleTimeText}>{slot.time}</Text>
+                                    <View style={[styles.statusTag, { backgroundColor: '#eff6ff', borderColor: '#dbeafe' }]}>
+                                        <Text style={[styles.statusText, { color: '#0055ff' }]}>P{cls.period}</Text>
                                     </View>
                                 </View>
+                                <View style={styles.scheduleTime}>
+                                    <MaterialCommunityIcons name="clock-outline" size={14} color="#5e6d8d" />
+                                    <Text style={styles.scheduleTimeText}>{cls.time}</Text>
+                                </View>
                             </View>
-                        ))
+                        </View>
                     ))}
-                    {(!courses || courses.length === 0 || courses.every(c => !c.schedule || c.schedule.length === 0)) && (
+                    {todayClasses.length === 0 && (
                         <Text style={{ textAlign: 'center', color: '#9aa2b1', marginVertical: 20 }}>No scheduled classes available today.</Text>
                     )}
                 </View>
@@ -238,7 +276,7 @@ export default function FacultyDashboard({ navigation }) {
                         <Text style={[styles.tabLabel, { color: '#0055ff', fontWeight: 'bold' }]}>Home</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('AttendanceManager')}>
+                    <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('AttendanceManager', { courseId: nextClass?.subject || '', courseName: nextClass?.subject || '' })}>
                         <MaterialCommunityIcons name="school-outline" size={26} color="#9aa2b1" />
                         <Text style={styles.tabLabel}>Classes</Text>
                     </TouchableOpacity>

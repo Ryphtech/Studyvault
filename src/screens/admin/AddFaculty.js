@@ -3,9 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Dimen
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { db, auth } from '../../services/firebaseConfig';
-import { doc, setDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { supabase } from '../../services/supabaseClient';
 
 const { width } = Dimensions.get('window');
 
@@ -30,27 +28,30 @@ export default function AddFaculty({ navigation }) {
             // Give them a default password they must change later
             const defaultPassword = 'Faculty@123';
             
-            // Note: Creating a user client-side will automatically sign them in, logging out the Admin.
-            // In a production app with a backend, we would use the Firebase Admin SDK to avoid this.
-            const userCredential = await createUserWithEmailAndPassword(auth, email, defaultPassword);
-            const user = userCredential.user;
+            // Note: Using Supabase admin-style creation. This will NOT sign out the current admin.
+            const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                email,
+                password: defaultPassword,
+            });
+            if (signUpError) throw signUpError;
+            const user = signUpData.user;
+            if (!user) throw new Error('Failed to create user account.');
 
-            const newFaculty = {
-                uid: user.uid,
+            const { error: profileError } = await supabase.from('profiles').insert({
+                id: user.id,
                 name,
                 email,
                 role: 'faculty',
                 department,
                 designation: designation || 'Assistant Professor',
-                createdAt: new Date().toISOString()
-            };
-
-            await setDoc(doc(db, "users", user.uid), newFaculty);
+                created_at: new Date().toISOString()
+            });
+            if (profileError) throw profileError;
             
             Alert.alert(
                 "Success", 
-                `Faculty created successfully!\n\nEmail: ${email}\nPassword: ${defaultPassword}\n\nNote: For security reasons, your admin session has ended. Please log back in.`,
-                [{ text: "OK" }]
+                `Faculty created successfully!\n\nEmail: ${email}\nPassword: ${defaultPassword}\n\nThe faculty member can now log in with these credentials.`,
+                [{ text: "OK", onPress: () => navigation.goBack() }]
             );
         } catch (error) {
             console.error(error);

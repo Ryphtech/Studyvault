@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, KeyboardAvoi
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { createPlacementDrive } from '../../services/firestoreService';
+import { createPlacementDrive } from '../../services/supabaseService';
 
 export default function ManageDrives({ navigation }) {
     const insets = useSafeAreaInsets();

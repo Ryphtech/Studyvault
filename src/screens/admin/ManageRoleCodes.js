@@ -3,9 +3,8 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Dimen
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { createRoleCode, deleteRoleCode, subscribeToRoleCodes } from '../../services/firestoreService';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../../services/firebaseConfig';
+import { createRoleCode, deleteRoleCode, subscribeToRoleCodes } from '../../services/supabaseService';
+import { supabase } from '../../services/supabaseClient';
 
 const { width } = Dimensions.get('window');
 
@@ -33,10 +32,15 @@ export default function ManageRoleCodes({ navigation }) {
             setCodes(data);
             setLoading(false);
         });
-        const unsubDepts = onSnapshot(collection(db, 'departments'), (snap) => {
-            setDepartments(snap.docs.map(d => d.data().name).sort());
-        });
-        return () => { unsubCodes(); unsubDepts(); };
+        const fetchDepts = async () => {
+            const { data } = await supabase.from('departments').select('name').order('name', { ascending: true });
+            setDepartments((data || []).map(d => d.name));
+        };
+        fetchDepts();
+        const channel = supabase.channel('rolecodes_departments')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'departments' }, fetchDepts)
+            .subscribe();
+        return () => { unsubCodes(); supabase.removeChannel(channel); };
     }, []);
 
     const generateCode = () => {

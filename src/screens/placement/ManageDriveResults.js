@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, Dimensions, 
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getDriveById, subscribeToDriveStudents, updateApplicationStatuses } from '../../services/firestoreService';
+import { getDriveById, subscribeToDriveStudents, updateApplicationStatuses } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 

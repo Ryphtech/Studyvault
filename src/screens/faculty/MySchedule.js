@@ -4,7 +4,7 @@ import { Text, ActivityIndicator } from 'react-native-paper';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '../../context/AuthContext';
-import { getFacultyCourses, subscribeToSchedules } from '../../services/firestoreService';
+import { getFacultyCourses, subscribeToSchedules } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -37,9 +37,9 @@ export default function MySchedule({ navigation }) {
     // Fetch faculty courses
     useEffect(() => {
         const fetchCourses = async () => {
-            if (!user?.uid) { setLoading(false); return; }
+            if (!user?.id) { setLoading(false); return; }
             try {
-                const coursesData = await getFacultyCourses(user.uid);
+                const coursesData = await getFacultyCourses(user.id);
                 setCourses(coursesData);
             } catch (error) {
                 console.error("Error fetching courses:", error);
@@ -48,20 +48,20 @@ export default function MySchedule({ navigation }) {
             }
         };
         fetchCourses();
-    }, [user?.uid]);
+    }, [user?.id]);
 
     // Subscribe to global schedule slots for the selected day
     useEffect(() => {
         const dayName = FULL_DAYS[selectedDay];
         const unsubscribe = subscribeToSchedules(dayName, (slots) => {
             // Filter to only show this faculty's slots if facultyId is set
-            const mySlots = user?.uid
-                ? slots.filter(s => s.facultyId === user.uid || !s.facultyId)
+            const mySlots = user?.id
+                ? slots.filter(s => s.facultyId === user.id || !s.facultyId)
                 : slots;
             setScheduleSlots(mySlots);
         });
         return () => unsubscribe();
-    }, [selectedDay, user?.uid]);
+    }, [selectedDay, user?.id]);
 
     // Build the combined schedule for the selected day
     const getDaySchedule = () => {
@@ -115,8 +115,8 @@ export default function MySchedule({ navigation }) {
 
     const onRefresh = async () => {
         setRefreshing(true);
-        if (user?.uid) {
-            const coursesData = await getFacultyCourses(user.uid);
+        if (user?.id) {
+            const coursesData = await getFacultyCourses(user.id);
             setCourses(coursesData);
         }
         setRefreshing(false);

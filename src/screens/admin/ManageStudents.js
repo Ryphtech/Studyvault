@@ -7,7 +7,7 @@ const { width } = Dimensions.get('window');
 
 const filters = ['All', 'Computer Science', 'Electrical', 'Mechanical', 'Civil', 'General'];
 
-import { subscribeToUsersByRole } from '../../services/firestoreService';
+import { subscribeToUsersByRole } from '../../services/supabaseService';
 import { ActivityIndicator } from 'react-native-paper';
 
 export default function ManageStudents({ navigation }) {

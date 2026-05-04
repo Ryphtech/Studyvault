@@ -4,7 +4,7 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '../../context/AuthContext';
-import { getDriveById, subscribeToDriveStudents } from '../../services/firestoreService';
+import { getDriveById, subscribeToDriveStudents } from '../../services/supabaseService';
 
 export default function DriveResults({ route, navigation }) {
     const { driveId } = route.params || {};
@@ -27,7 +27,7 @@ export default function DriveResults({ route, navigation }) {
 
         const unsubscribe = subscribeToDriveStudents(driveId, (students) => {
             // Find my application natively by the UID
-            const myApp = students.find(s => s.studentId === user?.uid);
+            const myApp = students.find(s => s.studentId === user?.id);
             setMyStatus(myApp || { status: 'Applied', statusColor: 'gray' });
 
             const selected = students.filter(s => s.status === 'Selected');
@@ -36,7 +36,7 @@ export default function DriveResults({ route, navigation }) {
         });
 
         return () => unsubscribe();
-    }, [driveId, user?.uid]);
+    }, [driveId, user?.id]);
 
     const getStatusStyle = (color) => {
         switch (color) {

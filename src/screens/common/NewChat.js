@@ -3,11 +3,10 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndi
 import { Text } from 'react-native-paper';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { collection, query, where, getDocs, limit } from 'firebase/firestore';
-import { db } from '../../services/firebaseConfig';
+import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../context/AuthContext';
 import { startDirectChat } from '../../services/chatService';
-import { getUserProfile } from '../../services/firestoreService';
+import { getUserProfile } from '../../services/supabaseService';
 
 export default function NewChat({ navigation }) {
     const insets = useSafeAreaInsets();
@@ -32,15 +31,14 @@ export default function NewChat({ navigation }) {
     const fetchUsers = async (role) => {
         setLoading(true);
         try {
-            const q = query(
-                collection(db, 'users'),
-                where('role', '==', role),
-                limit(50)
-            );
-            const snapshot = await getDocs(q);
-            const list = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('role', role)
+                .limit(50);
+            const list = (data || []).map(d => ({ uid: d.id, ...d }));
             // Remove self
-            setUsersList(list.filter(u => u.uid !== user?.uid));
+            setUsersList(list.filter(u => u.uid !== user?.id));
         } catch (error) {
             console.error("Error fetching users for chat:", error);
         } finally {
@@ -50,11 +48,11 @@ export default function NewChat({ navigation }) {
 
     const handleStartChat = async (targetUser) => {
         setLoading(true);
-        const myProfile = await getUserProfile(user.uid);
+        const myProfile = await getUserProfile(user.id);
         const myName = myProfile?.name || user.email?.split('@')[0] || 'User';
 
         const result = await startDirectChat(
-            user.uid, 
+            user.id, 
             targetUser.uid, 
             myName, 
             targetUser.name || 'User'

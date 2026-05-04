@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { subscribeToFeedbackSurveys } from '../../services/firestoreService';
+import { subscribeToFeedbackSurveys } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -144,7 +144,10 @@ export default function ManageFeedback({ navigation }) {
                                             <Text style={[styles.statusText, { color: style.text }]}>{survey.status}</Text>
                                         </View>
 
-                                        <TouchableOpacity style={styles.actionButton}>
+                                        <TouchableOpacity 
+                                            style={styles.actionButton}
+                                            onPress={() => navigation.navigate(survey.status === 'Draft' ? 'CreateFeedback' : 'FeedbackResults', { survey })}
+                                        >
                                             <Text style={[styles.actionText, survey.status === 'Draft' ? { color: '#6b7280' } : { color: '#0055ff' }]}>
                                                 {survey.status === 'Draft' ? 'Edit Form' : survey.status === 'Closed' ? 'View Report' : 'View Results'}
                                             </Text>
@@ -165,7 +168,7 @@ export default function ManageFeedback({ navigation }) {
             </ScrollView>
 
             {/* FAB */}
-            <TouchableOpacity style={styles.fab}>
+            <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('CreateFeedback')}>
                 <MaterialCommunityIcons name="plus-box-multiple-outline" size={28} color="white" />
             </TouchableOpacity>
         </View>

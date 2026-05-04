@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, Image, ActivityIndicator } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { subscribeToUsersByRole } from '../../services/firestoreService';
+import { subscribeToUsersByRole } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -22,9 +22,9 @@ export default function FilterStudents({ navigation }) {
     useEffect(() => {
         const unsubscribe = subscribeToUsersByRole('student', (fetchedUsers) => {
             const mappedStudents = fetchedUsers.map(user => ({
-                id: user.uid,
+                id: user.id,
                 name: user.name || 'Unnamed Student',
-                studentId: user.email ? user.email.split('@')[0] : user.uid.substring(0, 8),
+                studentId: user.email ? user.email.split('@')[0] : user.id.substring(0, 8),
                 cgpa: user.cgpa ? user.cgpa.toString() : '0.0',
                 dept: user.department || 'Unknown',
                 year: `Sem ${user.semester || 1}`,

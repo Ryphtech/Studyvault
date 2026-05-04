@@ -14,6 +14,9 @@ import ChatRoom from '../screens/common/ChatRoom';
 import NewChat from '../screens/common/NewChat';
 import NotificationDetail from '../screens/common/NotificationDetail';
 import SubmitFeedback from '../screens/student/SubmitFeedback';
+import PrivacySettings from '../screens/common/PrivacySettings';
+import HelpCenter from '../screens/common/HelpCenter';
+import TermsOfService from '../screens/common/TermsOfService';
 
 // Placeholders for other faculty screens
 const PlaceholderScreen = ({ route }) => (
@@ -22,7 +25,8 @@ const PlaceholderScreen = ({ route }) => (
     </View>
 );
 
-import StudentProfile from '../screens/student/StudentProfile';
+import FacultyProfile from '../screens/faculty/FacultyProfile';
+import FacultyEditProfile from '../screens/faculty/FacultyEditProfile';
 
 const Stack = createStackNavigator();
 
@@ -37,12 +41,16 @@ export default function FacultyNavigator() {
             <Stack.Screen name="Notifications" component={Notifications} />
             <Stack.Screen name="SendNotification" component={SendNotification} />
             <Stack.Screen name="MySchedule" component={MySchedule} />
-            <Stack.Screen name="Profile" component={StudentProfile} />
+            <Stack.Screen name="Profile" component={FacultyProfile} />
+            <Stack.Screen name="EditProfile" component={FacultyEditProfile} />
             <Stack.Screen name="ChatList" component={ChatList} />
             <Stack.Screen name="ChatRoom" component={ChatRoom} />
             <Stack.Screen name="NewChat" component={NewChat} />
             <Stack.Screen name="NotificationDetail" component={NotificationDetail} />
             <Stack.Screen name="SubmitFeedback" component={SubmitFeedback} />
+            <Stack.Screen name="PrivacySettings" component={PrivacySettings} />
+            <Stack.Screen name="HelpCenter" component={HelpCenter} />
+            <Stack.Screen name="TermsOfService" component={TermsOfService} />
         </Stack.Navigator>
     );
 }
