@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import { AuthContext } from '../../context/AuthContext';
-import { getStudentMarks } from '../../services/supabaseService';
+import { getStudentMarks, getActiveSemesterSubjects, getUserProfile } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -50,11 +50,63 @@ export default function MarksScreen({ navigation }) {
     const [refreshing, setRefreshing] = useState(false);
     const [marksData, setMarksData] = useState([]);
     const [stats, setStats] = useState({ percentage: 0, passed: 0, arrears: 0, totalSubjects: 0 });
+    const [semester, setSemester] = useState('1');
 
     const fetchMarks = async () => {
         try {
             const studentId = user?.id || 'student_demo';
-            const records = await getStudentMarks(studentId);
+            const [rawRecords, activeSubjects, profile] = await Promise.all([
+                getStudentMarks(studentId),
+                getActiveSemesterSubjects(studentId),
+                getUserProfile(studentId)
+            ]);
+
+            if (profile?.semester) {
+                setSemester(profile.semester.toString().replace(/\D/g, ''));
+            }
+            
+            const activeSubCodes = activeSubjects.map(s => s.code);
+            const activeSubNames = activeSubjects.map(s => s.name);
+            
+            let filteredRecords = rawRecords;
+            if (activeSubjects.length > 0) {
+                filteredRecords = rawRecords.filter(m => 
+                    activeSubCodes.includes(m.courseId || m.course_id) || 
+                    activeSubNames.includes(m.courseName || m.course_name)
+                );
+            }
+            
+            // Group by course_id
+            const subjectMap = {};
+            
+            filteredRecords.forEach(record => {
+                const cId = record.courseId || record.course_id;
+                if (!subjectMap[cId]) {
+                    subjectMap[cId] = {
+                        subjectId: cId,
+                        subjectName: record.courseName || record.course_name,
+                        credits: 3, // Default fallback
+                        total: 0,
+                        maxScore: 0,
+                        cia1: '-',
+                        cia2: '-',
+                        assignment: '-',
+                    };
+                }
+                
+                const type = record.assessmentType || record.assessment_type;
+                const score = parseInt(record.score) || 0;
+                const max = parseInt(record.maxScore || record.max_score) || 50;
+                
+                if (type === 'Internal 1') subjectMap[cId].cia1 = score;
+                else if (type === 'Internal 2') subjectMap[cId].cia2 = score;
+                else if (type === 'Assignment') subjectMap[cId].assignment = score;
+                
+                subjectMap[cId].total += score;
+                subjectMap[cId].maxScore += max;
+            });
+            
+            const records = Object.values(subjectMap);
             setMarksData(records);
 
             // Calculate stats
@@ -66,9 +118,9 @@ export default function MarksScreen({ navigation }) {
             records.forEach(subject => {
                 totalMarks += subject.total;
                 maxTotal += subject.maxScore;
-                if (subject.total >= (subject.maxScore * 0.40)) { // Assuming 40% pass
+                if (subject.maxScore > 0 && subject.total >= (subject.maxScore * 0.40)) { // Assuming 40% pass
                     passed++;
-                } else {
+                } else if (subject.maxScore > 0) {
                     arrears++;
                 }
             });
@@ -90,8 +142,12 @@ export default function MarksScreen({ navigation }) {
     };
 
     useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            fetchMarks();
+        });
         fetchMarks();
-    }, []);
+        return unsubscribe;
+    }, [navigation, user?.id]);
 
     const onRefresh = () => {
         setRefreshing(true);
@@ -176,7 +232,7 @@ export default function MarksScreen({ navigation }) {
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Subject-wise Marks</Text>
                     <View style={styles.semesterBadge}>
-                        <Text style={styles.semesterText}>Semester 6</Text>
+                        <Text style={styles.semesterText}>Semester {semester}</Text>
                     </View>
                 </View>
 

@@ -112,8 +112,8 @@ export default function ManageEvents({ navigation }) {
                                     <View style={styles.cardContent}>
                                         <View style={styles.cardHeader}>
                                             <Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text>
-                                            <TouchableOpacity>
-                                                <MaterialCommunityIcons name="dots-vertical" size={20} color="#9ca3af" />
+                                            <TouchableOpacity onPress={() => navigation.navigate('AddEvent', { event })}>
+                                                <MaterialCommunityIcons name="pencil" size={20} color="#0055ff" />
                                             </TouchableOpacity>
                                         </View>
 

@@ -39,7 +39,9 @@ export default function StudentDashboard({ navigation }) {
     const [events, setEvents] = useState([]);
     const [recentJobs, setRecentJobs] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
+    const [rawMarks, setRawMarks] = useState([]);
     const [chartData, setChartData] = useState({ labels: [], yourScores: [], classAvg: [] });
+    const [overallPercentage, setOverallPercentage] = useState(0);
 
     const fetchData = async () => {
         try {
@@ -52,7 +54,7 @@ export default function StudentDashboard({ navigation }) {
             // Adding a little extra logic to extract a short semester format (e.g. "Sem 6" instead of "6th")
             let shortSem = "Sem X";
             if (statsData?.semester) {
-                const num = statsData.semester.replace(/\D/g, '');
+                const num = statsData.semester.toString().replace(/\D/g, '');
                 if (num) shortSem = `Sem ${num}`;
             }
 
@@ -71,8 +73,12 @@ export default function StudentDashboard({ navigation }) {
     };
 
     useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            fetchData();
+        });
         fetchData();
-    }, []);
+        return unsubscribe;
+    }, [navigation]);
 
     const onRefresh = () => {
         setRefreshing(true);
@@ -96,46 +102,77 @@ export default function StudentDashboard({ navigation }) {
         if (!studentId) return;
 
         const unsubscribe = subscribeToStudentMarks(studentId, (marks) => {
-            if (!marks || marks.length === 0) {
-                // No marks yet — show placeholder
-                setChartData({
-                    labels: ['No Data'],
-                    yourScores: [0],
-                    classAvg: [0]
-                });
-                return;
-            }
-
-            // Group marks by courseName and compute average score per subject
-            const courseMap = {};
-            marks.forEach(m => {
-                const key = m.courseName || m.courseId || 'Unknown';
-                if (!courseMap[key]) courseMap[key] = [];
-                const score = parseFloat(m.marks);
-                const max = parseFloat(m.maxMarks || 50);
-                if (!isNaN(score) && !isNaN(max) && max > 0) {
-                    courseMap[key].push((score / max) * 10); // scale to 10-point
-                }
-            });
-
-            const labels = [];
-            const yourScores = [];
-            Object.entries(courseMap).forEach(([course, scores]) => {
-                // Shorten course label to 6 chars
-                labels.push(course.length > 6 ? course.substring(0, 6) : course);
-                const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-                yourScores.push(Math.round(avg * 10) / 10);
-            });
-
-            // Compute overall class average line (mean of all your scores as a flat reference)
-            const overallAvg = yourScores.reduce((a, b) => a + b, 0) / yourScores.length;
-            const classAvg = yourScores.map(() => Math.round(overallAvg * 10) / 10);
-
-            setChartData({ labels, yourScores, classAvg });
+            setRawMarks(marks || []);
         });
 
         return () => unsubscribe();
     }, [user?.id]);
+
+    useEffect(() => {
+        if (!rawMarks) return;
+
+        // Filter marks by active semester subjects
+        const activeSubCodes = stats?.activeSubjects?.map(s => s.code) || [];
+        const activeSubNames = stats?.activeSubjects?.map(s => s.name) || [];
+        
+        let filteredMarks = rawMarks;
+        if (stats?.activeSubjects && stats.activeSubjects.length > 0) {
+            filteredMarks = rawMarks.filter(m => 
+                activeSubCodes.includes(m.courseId) || 
+                activeSubNames.includes(m.courseName)
+            );
+        }
+
+        if (!filteredMarks || filteredMarks.length === 0) {
+            setChartData({
+                labels: ['No Data'],
+                yourScores: [0],
+                classAvg: [0]
+            });
+            setOverallPercentage(0);
+            return;
+        }
+
+        // Calculate overall percentage
+        let totalScore = 0;
+        let totalMax = 0;
+        filteredMarks.forEach(m => {
+            const score = parseFloat(m.marks);
+            const max = parseFloat(m.maxMarks || 50);
+            if (!isNaN(score) && !isNaN(max) && max > 0) {
+                totalScore += score;
+                totalMax += max;
+            }
+        });
+        setOverallPercentage(totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0);
+
+        // Group marks by courseName and compute average score per subject
+        const courseMap = {};
+        filteredMarks.forEach(m => {
+            const key = m.courseName || m.courseId || 'Unknown';
+            if (!courseMap[key]) courseMap[key] = [];
+            const score = parseFloat(m.marks);
+            const max = parseFloat(m.maxMarks || 50);
+            if (!isNaN(score) && !isNaN(max) && max > 0) {
+                courseMap[key].push((score / max) * 10); // scale to 10-point
+            }
+        });
+
+        const labels = [];
+        const yourScores = [];
+        Object.entries(courseMap).forEach(([course, scores]) => {
+            // Shorten course label to 6 chars
+            labels.push(course.length > 6 ? course.substring(0, 6) : course);
+            const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+            yourScores.push(Math.round(avg * 10) / 10);
+        });
+
+        // Compute overall class average line (mean of all your scores as a flat reference)
+        const overallAvg = yourScores.length > 0 ? yourScores.reduce((a, b) => a + b, 0) / yourScores.length : 0;
+        const classAvg = yourScores.map(() => Math.round(overallAvg * 10) / 10);
+
+        setChartData({ labels, yourScores, classAvg });
+    }, [rawMarks, stats?.activeSubjects]);
 
     if (loading) {
         return (
@@ -216,8 +253,8 @@ export default function StudentDashboard({ navigation }) {
                                 </View>
                             </View>
                             <View style={styles.metricContent}>
-                                <Text style={styles.metricValue}>{stats.cgpa}</Text>
-                                <Text style={styles.metricLabel}>CGPA Score</Text>
+                                <Text style={styles.metricValue}>{overallPercentage}%</Text>
+                                <Text style={styles.metricLabel}>Total Marks</Text>
                             </View>
                             <View style={[styles.metricDeco, { backgroundColor: 'rgba(147, 51, 234, 0.05)' }]} />
                         </View>
@@ -242,6 +279,14 @@ export default function StudentDashboard({ navigation }) {
                             </View>
                             <Text style={styles.actionTitle}>Analytics</Text>
                             <Text style={styles.actionSubtitle}>Your Growth</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('Timetable')}>
+                            <View style={[styles.actionIconBox, { backgroundColor: '#f0fdf4' }]}>
+                                <MaterialIcons name="schedule" size={24} color="#16a34a" />
+                            </View>
+                            <Text style={styles.actionTitle}>Time Table</Text>
+                            <Text style={styles.actionSubtitle}>Class Schedule</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

@@ -4,7 +4,7 @@ import { Text, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../context/AuthContext';
-import { getUserProfile, seedInitialData, removeSeedData, seedAllCurriculumData, seedFeedbackData, seedNotificationData } from '../../services/supabaseService';
+import { getUserProfile, seedInitialData, removeSeedData, seedAllCurriculumData, seedFeedbackData, seedNotificationData, seedPlacementsData } from '../../services/supabaseService';
 
 export default function SettingsScreen({ navigation }) {
     const { user, logout } = useContext(AuthContext);
@@ -98,6 +98,19 @@ export default function SettingsScreen({ navigation }) {
             Alert.alert("Success", "Notifications seeded successfully!");
         } else {
             Alert.alert("Error", "Failed to seed notifications.");
+        }
+    };
+
+    const [seedingPlacements, setSeedingPlacements] = useState(false);
+
+    const handleSeedPlacements = async () => {
+        setSeedingPlacements(true);
+        const success = await seedPlacementsData();
+        setSeedingPlacements(false);
+        if (success) {
+            Alert.alert("Success", "Mock Placements data seeded successfully!");
+        } else {
+            Alert.alert("Error", "Failed to seed placements.");
         }
     };
 
@@ -361,6 +374,17 @@ export default function SettingsScreen({ navigation }) {
                                 <>
                                     <MaterialCommunityIcons name="bell-plus" size={20} color="white" />
                                     <Text style={styles.devBtnText}>Seed Notification Data</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={[styles.devButton, { backgroundColor: '#db2777', marginTop: 12 }]} onPress={handleSeedPlacements} disabled={seedingPlacements}>
+                            {seedingPlacements ? (
+                                <ActivityIndicator size="small" color="white" />
+                            ) : (
+                                <>
+                                    <MaterialCommunityIcons name="briefcase-plus" size={20} color="white" />
+                                    <Text style={styles.devBtnText}>Seed Placements Data (Mock)</Text>
                                 </>
                             )}
                         </TouchableOpacity>

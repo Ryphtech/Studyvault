@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, Image } from 'react-native';
-import { Text } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, Image, Alert, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, ActivityIndicator, Button } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
 const filters = ['All', 'Computer Science', 'Electrical', 'Mechanical', 'Civil', 'General'];
 
-import { subscribeToUsersByRole } from '../../services/supabaseService';
-import { ActivityIndicator } from 'react-native-paper';
+import { subscribeToUsersByRole, updateUserProfile, deleteUserProfile } from '../../services/supabaseService';
 
 export default function ManageStudents({ navigation }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedFilter, setSelectedFilter] = useState('All');
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [editModalVisible, setEditModalVisible] = useState(false);
+    const [selectedStudent, setSelectedStudent] = useState(null);
+    const [formData, setFormData] = useState({ name: '', department: '', semester: '' });
+    const [saving, setSaving] = useState(false);
 
     React.useEffect(() => {
         const unsubscribe = subscribeToUsersByRole('student', (data) => {
@@ -35,23 +38,91 @@ export default function ManageStudents({ navigation }) {
     };
 
     const filteredStudents = students.filter(student => {
-        const matchesSearch = student.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            student.email?.toLowerCase().includes(searchQuery.toLowerCase());
+        const query = searchQuery.toLowerCase();
+        const name = (student.name || '').toLowerCase();
+        const email = (student.email || '').toLowerCase();
+        const matchesSearch = name.includes(query) || email.includes(query);
+        
+        if (!matchesSearch) return false;
+        if (selectedFilter === 'All') return true;
 
-        if (selectedFilter === 'All') return matchesSearch;
-
-        const dept = student.department?.toLowerCase() || '';
+        const dept = (student.department || '').toLowerCase();
         const filter = selectedFilter.toLowerCase();
 
-        // Simple mapping for demo filters
-        const matchesFilter = (filter.includes('computer') && (dept.includes('computer') || dept.includes('cs'))) ||
-            (filter.includes('electrical') && (dept.includes('electric') || dept.includes('ee'))) ||
-            (filter.includes('mechanical') && (dept.includes('mechanic') || dept.includes('me'))) ||
-            (filter.includes('civil') && (dept.includes('civil') || dept.includes('ce'))) ||
-            (dept.includes(filter));
+        // Exact match or keyword match
+        if (dept.includes(filter)) return true;
+        
+        // Aliases with more precise matching to avoid 'ee' matching 'Engineering'
+        const isComputerFilter = filter.includes('computer');
+        const isElectricalFilter = filter.includes('electrical') || filter === 'ee';
+        const isMechanicalFilter = filter.includes('mechanical') || filter === 'me';
+        const isCivilFilter = filter.includes('civil') || filter === 'ce';
 
-        return matchesSearch && matchesFilter;
+        if (isComputerFilter && (dept.includes('computer') || dept === 'cs' || dept === 'it' || dept === 'cse')) return true;
+        if (isElectricalFilter && (dept.includes('electric') || dept === 'ee' || dept === 'ece' || dept === 'eee')) return true;
+        if (isMechanicalFilter && (dept.includes('mechanic') || dept === 'me')) return true;
+        if (isCivilFilter && (dept.includes('civil') || dept === 'ce')) return true;
+
+        return false;
     });
+
+    const openEditModal = (student) => {
+        setSelectedStudent(student);
+        setFormData({
+            name: student.name || '',
+            department: student.department || '',
+            semester: student.semester?.toString() || '1'
+        });
+        setEditModalVisible(true);
+    };
+
+    const handleSave = async () => {
+        if (!selectedStudent) return;
+        setSaving(true);
+        try {
+            const success = await updateUserProfile(selectedStudent.uid, {
+                ...formData,
+                semester: parseInt(formData.semester) || 1
+            });
+            if (success) {
+                setEditModalVisible(false);
+                Alert.alert('Success', 'Student profile updated successfully.');
+            } else {
+                Alert.alert('Error', 'Failed to update student profile.');
+            }
+        } catch (e) {
+            console.error(e);
+            Alert.alert('Error', 'An unexpected error occurred.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = (student) => {
+        Alert.alert(
+            'Delete Student',
+            `Are you sure you want to delete ${student.name}? This action cannot be undone.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { 
+                    text: 'Delete', 
+                    style: 'destructive', 
+                    onPress: async () => {
+                        try {
+                            const success = await deleteUserProfile(student.uid);
+                            if (success) {
+                                Alert.alert('Deleted', 'Student has been removed.');
+                            } else {
+                                Alert.alert('Error', 'Failed to delete student.');
+                            }
+                        } catch (e) {
+                            console.error(e);
+                        }
+                    } 
+                }
+            ]
+        );
+    };
 
     return (
         <View style={styles.container}>
@@ -135,9 +206,14 @@ export default function ManageStudents({ navigation }) {
                                             </View>
                                         </View>
                                     </View>
-                                    <TouchableOpacity style={styles.moreButton}>
-                                        <MaterialCommunityIcons name="dots-vertical" size={24} color="#9ca3af" />
-                                    </TouchableOpacity>
+                                    <View style={{ flexDirection: 'row', gap: 4 }}>
+                                        <TouchableOpacity style={styles.actionButton} onPress={() => openEditModal(student)}>
+                                            <MaterialCommunityIcons name="pencil" size={20} color="#0055ff" />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={styles.actionButton} onPress={() => handleDelete(student)}>
+                                            <MaterialCommunityIcons name="trash-can-outline" size={20} color="#ef4444" />
+                                        </TouchableOpacity>
+                                    </View>
                                 </TouchableOpacity>
                             );
                         })}
@@ -154,6 +230,61 @@ export default function ManageStudents({ navigation }) {
 
                 <View style={{ height: 100 }} />
             </ScrollView>
+
+            {/* Edit Modal */}
+            <Modal visible={editModalVisible} transparent animationType="slide" onRequestClose={() => setEditModalVisible(false)}>
+                <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Edit Student</Text>
+                            <TouchableOpacity onPress={() => setEditModalVisible(false)}>
+                                <MaterialCommunityIcons name="close" size={24} color="#64748b" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={styles.modalForm}>
+                            <View style={styles.formGroup}>
+                                <Text style={styles.inputLabel}>Full Name</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={formData.name}
+                                    onChangeText={(t) => setFormData({ ...formData, name: t })}
+                                    placeholder="Enter full name"
+                                />
+                            </View>
+
+                            <View style={styles.formGroup}>
+                                <Text style={styles.inputLabel}>Department</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={formData.department}
+                                    onChangeText={(t) => setFormData({ ...formData, department: t })}
+                                    placeholder="e.g. Computer Science"
+                                />
+                            </View>
+
+                            <View style={styles.formGroup}>
+                                <Text style={styles.inputLabel}>Semester</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={formData.semester}
+                                    onChangeText={(t) => setFormData({ ...formData, semester: t })}
+                                    keyboardType="numeric"
+                                    placeholder="e.g. 6"
+                                />
+                            </View>
+
+                            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
+                                {saving ? <ActivityIndicator color="white" size="small" /> : <Text style={styles.saveBtnText}>Save Changes</Text>}
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditModalVisible(false)}>
+                                <Text style={styles.cancelBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                        </ScrollView>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
 
             {/* Bottom Tab Bar (Custom) */}
             <View style={styles.bottomBar}>
@@ -217,7 +348,21 @@ const styles = StyleSheet.create({
     studentId: { fontSize: 12, color: '#6b7280', marginVertical: 2 },
     badge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
     badgeText: { fontSize: 10, fontWeight: 'bold' },
-    moreButton: { padding: 4 },
+    actionButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f8fafc', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#f1f5f9' },
+
+    // Modal
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    modalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#101318' },
+    modalForm: { gap: 16 },
+    formGroup: { marginBottom: 16 },
+    inputLabel: { fontSize: 12, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+    input: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, height: 48, paddingHorizontal: 16, fontSize: 16, color: '#101318' },
+    saveBtn: { backgroundColor: '#0055ff', height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 12 },
+    saveBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+    cancelBtn: { height: 52, justifyContent: 'center', alignItems: 'center' },
+    cancelBtnText: { color: '#64748b', fontSize: 16, fontWeight: '500' },
 
     loadMoreIndicator: { height: 6, width: 48, borderRadius: 3, backgroundColor: '#e5e7eb', alignSelf: 'center', marginTop: 16 },
 

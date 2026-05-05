@@ -401,21 +401,65 @@ export const subscribeToUsersByRole = (role, callback) => {
     return () => supabase.removeChannel(channel);
 };
 
+export const getActiveSemesterSubjects = async (studentId) => {
+    try {
+        const profile = await getUserProfile(studentId);
+        let dept = profile?.department || 'Computer Science';
+        if (dept.toUpperCase() === 'CS' || dept.toUpperCase() === 'CSE') dept = 'Computer Science';
+        
+        const semRaw = profile?.semester || '1';
+        const semFormatted = semRaw.toString().startsWith('Sem') ? semRaw : `Sem ${semRaw}`;
+
+        const [curriculum, courses] = await Promise.all([
+            getAllCurriculumSubjects(dept),
+            getDepartmentCourses(dept)
+        ]);
+
+        const semSubjects = (curriculum || []).filter(s => s.semester === semFormatted);
+        const assignedCourses = courses || [];
+        
+        const activeSubjects = semSubjects.filter(sub => 
+            assignedCourses.some(c => c.subject_code === sub.code || c.subject_name === sub.name)
+        );
+
+        return activeSubjects.length > 0 ? activeSubjects : (semSubjects.length > 0 ? semSubjects : []);
+    } catch (e) {
+        console.error("Error getting active semester subjects:", e);
+        return [];
+    }
+};
+
 // ─── Dashboard Stats ───
 export const getStudentDashboardStats = async (studentId) => {
     const profile = await getUserProfile(studentId);
     const attendanceRecords = await getStudentAttendance(studentId);
+    const activeSubjects = await getActiveSemesterSubjects(studentId);
+    
     let total = 0, attended = 0;
-    attendanceRecords.forEach(rec => {
-        total += rec.totalClasses || 0;
-        attended += rec.attendedClasses || 0;
-    });
+    
+    if (activeSubjects.length > 0) {
+        activeSubjects.forEach(sub => {
+            const rec = attendanceRecords.find(r => r.subjectId === sub.code || r.subjectName === sub.name);
+            if (rec) {
+                total += rec.totalClasses || 0;
+                attended += rec.attendedClasses || 0;
+            }
+        });
+    } else {
+        attendanceRecords.forEach(rec => {
+            total += rec.totalClasses || 0;
+            attended += rec.attendedClasses || 0;
+        });
+    }
+
     const attendancePercentage = total > 0 ? Math.round((attended / total) * 100) : 0;
     return {
         attendance: attendancePercentage,
         cgpa: profile?.cgpa || 0,
         name: profile?.name || "Student",
-        department: profile?.department || "General"
+        department: profile?.department || "General",
+        semester: profile?.semester || "1",
+        activeSubjects: activeSubjects
     };
 };
 
@@ -625,13 +669,15 @@ export const getStudentMarks = async (studentId) => {
 
 export const subscribeToStudentMarks = (studentId, callback) => {
     supabase.from('marks').select('*').eq('student_id', studentId).then(({ data }) => {
-        callback(mapRows(data));
+        const formatted = (data || []).map(d => ({ ...mapRow(d), marks: d.score }));
+        callback(formatted);
     });
     const channelId = `marks_${studentId}_${Date.now()}`;
     const channel = supabase.channel(channelId)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'marks', filter: `student_id=eq.${studentId}` }, async () => {
             const { data } = await supabase.from('marks').select('*').eq('student_id', studentId);
-            callback(mapRows(data));
+            const formatted = (data || []).map(d => ({ ...mapRow(d), marks: d.score }));
+            callback(formatted);
         })
         .subscribe();
     return () => supabase.removeChannel(channel);
@@ -659,6 +705,28 @@ export const createEvent = async (eventData) => {
         return { success: true, id: data.id };
     } catch (e) {
         console.error("Error creating event:", e);
+        return { success: false, error: e.message };
+    }
+};
+
+export const updateEvent = async (id, eventData) => {
+    try {
+        const { error } = await supabase.from('events').update(mapToSnake(eventData)).eq('id', id);
+        if (error) throw error;
+        return { success: true };
+    } catch (e) {
+        console.error("Error updating event:", e);
+        return { success: false, error: e.message };
+    }
+};
+
+export const deleteEvent = async (id) => {
+    try {
+        const { error } = await supabase.from('events').delete().eq('id', id);
+        if (error) throw error;
+        return { success: true };
+    } catch (e) {
+        console.error("Error deleting event:", e);
         return { success: false, error: e.message };
     }
 };
@@ -778,6 +846,44 @@ export const subscribeToPlacedStudents = (callback) => {
         })
         .subscribe();
     return () => supabase.removeChannel(channel);
+};
+
+export const getEligibleStudentsCount = async () => {
+    try {
+        const { count, error } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'student');
+        if (error) throw error;
+        return count || 0;
+    } catch (e) {
+        console.error("Error fetching eligible students:", e);
+        return 0;
+    }
+};
+
+export const seedPlacementsData = async () => {
+    try {
+        const drives = [
+            { company_name: 'Google', role: 'Software Engineer', package: '24 LPA', location: 'Bangalore', date: '2026-06-15', type: 'Virtual', eligibility: 'CGPA > 8.0', registered: 120 },
+            { company_name: 'Microsoft', role: 'SDE-1', package: '20 LPA', location: 'Hyderabad', date: '2026-07-10', type: 'On Campus', eligibility: 'CGPA > 7.5', registered: 85 },
+            { company_name: 'TCS', role: 'System Engineer', package: '7 LPA', location: 'Pan India', date: '2026-05-20', type: 'On Campus', eligibility: 'CGPA > 6.0', registered: 200 }
+        ];
+        
+        const { error: driveErr } = await supabase.from('placements').insert(drives);
+        if (driveErr) throw driveErr;
+
+        const placed = [
+            { name: 'Arjun M', company: 'Amazon', package: '18 LPA', avatar: 'https://randomuser.me/api/portraits/men/32.jpg' },
+            { name: 'Sneha K', company: 'Deloitte', package: '8 LPA', avatar: 'https://randomuser.me/api/portraits/women/44.jpg' },
+            { name: 'Rahul R', company: 'Infosys', package: '5 LPA', avatar: 'https://randomuser.me/api/portraits/men/45.jpg' }
+        ];
+        
+        const { error: placedErr } = await supabase.from('placed_students').insert(placed);
+        if (placedErr) throw placedErr;
+
+        return true;
+    } catch (e) {
+        console.error("Error seeding placements:", e);
+        return false;
+    }
 };
 
 export const subscribeToDriveStudents = (driveId, callback) => {
@@ -1182,6 +1288,20 @@ export const getDepartmentStats = async (department) => {
 };
 
 // ─── Faculty Marks Upload ───
+export const getMarksForCourse = async (courseId, assessmentType) => {
+    try {
+        const { data, error } = await supabase.from('marks')
+            .select('*')
+            .eq('course_id', courseId)
+            .eq('assessment_type', assessmentType);
+        if (error) throw error;
+        return data || [];
+    } catch (e) {
+        console.error("Error fetching course marks:", e);
+        return [];
+    }
+};
+
 export const getStudentsForMarksEntry = async (department) => {
     try {
         const { data } = await supabase.from('profiles').select('*').eq('role', 'student').eq('department', department || 'Computer Science');
@@ -1216,7 +1336,17 @@ export const saveMarksForCourse = async (marksData) => {
                 faculty_name: facultyName,
                 uploaded_at: new Date().toISOString(),
             }));
-        if (rows.length > 0) {
+            
+        // First delete existing marks for this exam to prevent duplicates
+        const studentIds = rows.map(r => r.student_id);
+        if (studentIds.length > 0) {
+            await supabase.from('marks')
+                .delete()
+                .eq('course_id', courseId)
+                .eq('assessment_type', assessmentType)
+                .in('student_id', studentIds);
+                
+            // Then insert new rows
             const { error } = await supabase.from('marks').insert(rows);
             if (error) throw error;
         }
@@ -1343,5 +1473,20 @@ export const uploadAudio = async (uri) => {
     } catch (e) {
         console.error("Error uploading audio:", e);
         return null;
+    }
+};
+
+/**
+ * System Factory Reset - DESTRUCTIVE ACTION
+ * Deletes all users except the calling admin and truncates application data tables.
+ */
+export const factoryResetSystem = async (adminId) => {
+    try {
+        const { data, error } = await supabase.rpc('factory_reset', { admin_uuid: adminId });
+        if (error) throw error;
+        return { success: true };
+    } catch (e) {
+        console.error("Error during factory reset:", e);
+        return { success: false, message: e.message || 'Reset failed.' };
     }
 };

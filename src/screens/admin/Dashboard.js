@@ -131,6 +131,14 @@ export default function AdminDashboard({ navigation }) {
                         <Text style={styles.manageSubtitle}>Hiring & Allocations</Text>
                     </TouchableOpacity>
 
+                    <TouchableOpacity style={styles.manageCard} onPress={() => navigation.navigate('ManageHOD')}>
+                        <View style={[styles.manageIconBox, { backgroundColor: '#eff6ff', color: '#0055ff' }]}>
+                            <MaterialCommunityIcons name="account-tie" size={32} color="#0055ff" />
+                        </View>
+                        <Text style={styles.manageTitle}>Manage HOD</Text>
+                        <Text style={styles.manageSubtitle}>Dept. Heads</Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity style={styles.manageCard} onPress={() => navigation.navigate('ManageEvents')}>
                         <View style={[styles.manageIconBox, { backgroundColor: '#fff7ed', color: '#ea580c' }]}>
                             <MaterialCommunityIcons name="calendar-month" size={32} color="#ea580c" />
@@ -177,6 +185,13 @@ export default function AdminDashboard({ navigation }) {
                         </View>
                         <Text style={styles.manageTitle}>Notify</Text>
                         <Text style={styles.manageSubtitle}>Send Alerts</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.manageCard} onPress={() => navigation.navigate('SystemReset')}>
+                        <View style={[styles.manageIconBox, { backgroundColor: '#fee2e2' }]}>
+                            <MaterialCommunityIcons name="alert" size={32} color="#dc2626" />
+                        </View>
+                        <Text style={styles.manageTitle}>System Reset</Text>
+                        <Text style={styles.manageSubtitle}>Factory Reset Data</Text>
                     </TouchableOpacity>
                 </View>
 

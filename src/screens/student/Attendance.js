@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import { AuthContext } from '../../context/AuthContext';
-import { getStudentAttendance, getStudentDashboardStats, getAllCurriculumSubjects, getDepartmentCourses } from '../../services/supabaseService';
+import { getStudentAttendance, getStudentDashboardStats, getAllCurriculumSubjects, getDepartmentCourses, getUserProfile } from '../../services/supabaseService';
 import { supabase } from '../../services/supabaseClient';
 
 const { width } = Dimensions.get('window');
@@ -46,11 +46,12 @@ const CircularProgress = ({ size, strokeWidth, progress, color, backgroundColor 
 };
 
 export default function AttendanceScreen({ navigation }) {
-    const { user, profile } = useContext(AuthContext);
+    const { user } = useContext(AuthContext);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [attendanceData, setAttendanceData] = useState([]);
     const [overallStats, setOverallStats] = useState({ percentage: 0, total: 0, present: 0, absent: 0 });
+    const [semester, setSemester] = useState('1');
 
     // Detail modal state
     const [detailVisible, setDetailVisible] = useState(false);
@@ -61,14 +62,19 @@ export default function AttendanceScreen({ navigation }) {
     const fetchAttendance = async () => {
         try {
             const studentId = user?.id || 'student_demo';
+            const fetchedProfile = await getUserProfile(studentId);
             
-            let dept = profile?.department || 'Computer Science';
+            if (fetchedProfile?.semester) {
+                setSemester(fetchedProfile.semester.toString());
+            }
+
+            let dept = fetchedProfile?.department || 'Computer Science';
             // Normalize CS -> Computer Science mapping for curriculum lookup if needed
             if (dept.toUpperCase() === 'CS' || dept.toUpperCase() === 'CSE') {
                 dept = 'Computer Science'; 
             }
             
-            const semRaw = profile?.semester || '1';
+            const semRaw = fetchedProfile?.semester || '1';
             const semFormatted = semRaw.toString().startsWith('Sem') ? semRaw : `Sem ${semRaw}`;
 
             const [records, curriculum, courses] = await Promise.all([
@@ -131,8 +137,11 @@ export default function AttendanceScreen({ navigation }) {
     };
 
     useEffect(() => {
-        fetchAttendance();
-    }, []);
+        const unsubscribe = navigation.addListener('focus', () => {
+            fetchAttendance();
+        });
+        return unsubscribe;
+    }, [navigation, user?.id]);
 
     const onRefresh = () => {
         setRefreshing(true);
@@ -251,7 +260,7 @@ export default function AttendanceScreen({ navigation }) {
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Subject-wise</Text>
                     <View style={styles.semesterBadge}>
-                        <Text style={styles.semesterText}>Semester {profile?.semester?.toString()?.replace(/\D/g, '') || '1'}</Text>
+                        <Text style={styles.semesterText}>Semester {semester.replace(/\D/g, '') || '1'}</Text>
                     </View>
                 </View>
 

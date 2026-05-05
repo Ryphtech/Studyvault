@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl }
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { AuthContext } from '../../context/AuthContext';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import { subscribeToActiveDrives, subscribeToPlacedStudents, getUserProfile } from '../../services/supabaseService';
+import { subscribeToActiveDrives, subscribeToPlacedStudents, getUserProfile, getEligibleStudentsCount } from '../../services/supabaseService';
 
 export default function PlacementDashboard({ navigation }) {
     const { user, logout } = useContext(AuthContext);
@@ -11,6 +11,7 @@ export default function PlacementDashboard({ navigation }) {
     const [placedStudents, setPlacedStudents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [officerName, setOfficerName] = useState('Officer');
+    const [eligibleStudents, setEligibleStudents] = useState(0);
 
     useEffect(() => {
         const loadName = async () => {
@@ -18,6 +19,8 @@ export default function PlacementDashboard({ navigation }) {
                 const profile = await getUserProfile(user.id);
                 if (profile?.name) setOfficerName(profile.name.split(' ')[0]);
             }
+            const count = await getEligibleStudentsCount();
+            setEligibleStudents(count);
         };
         loadName();
     }, [user]);
@@ -105,7 +108,7 @@ export default function PlacementDashboard({ navigation }) {
                             </View>
                         </View>
                         <View>
-                            <Text style={styles.statValue}>{drives.length || 12}</Text>
+                            <Text style={styles.statValue}>{drives.length}</Text>
                             <Text style={styles.statLabel}>Active Drives</Text>
                         </View>
                     </View>
@@ -120,7 +123,7 @@ export default function PlacementDashboard({ navigation }) {
                             </View>
                         </View>
                         <View>
-                            <Text style={styles.statValue}>450</Text>
+                            <Text style={styles.statValue}>{eligibleStudents}</Text>
                             <Text style={styles.statLabel}>Eligible Students</Text>
                         </View>
                     </View>
@@ -213,7 +216,7 @@ export default function PlacementDashboard({ navigation }) {
                                         <Image source={{ uri: 'https://randomuser.me/api/portraits/men/32.jpg' }} style={styles.pileAvatar2} />
                                         <Image source={{ uri: 'https://randomuser.me/api/portraits/women/68.jpg' }} style={styles.pileAvatar3} />
                                         <View style={styles.pileCounterBox}>
-                                            <Text style={styles.pileCounterText}>+{drive.registered || 42}</Text>
+                                            <Text style={styles.pileCounterText}>+{drive.registered || 0}</Text>
                                         </View>
                                     </View>
                                     <TouchableOpacity style={styles.manageButton} onPress={() => navigation.navigate('ManageDriveResults', { driveId: drive.id })}>

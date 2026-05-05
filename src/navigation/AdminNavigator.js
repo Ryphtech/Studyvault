@@ -12,11 +12,15 @@ const PlaceholderScreen = ({ route }) => (
 import ManageStudents from '../screens/admin/ManageStudents';
 
 import ManageFaculty from '../screens/admin/ManageFaculty';
+import ManageHOD from '../screens/admin/ManageHOD';
+import AddHOD from '../screens/admin/AddHOD';
 import AddFaculty from '../screens/admin/AddFaculty';
 import ManageSubjects from '../screens/admin/ManageSubjects';
 import ManageEvents from '../screens/admin/ManageEvents';
 import AddEvent from '../screens/admin/AddEvent';
 import ManageFeedback from '../screens/admin/ManageFeedback';
+import CreateFeedback from '../screens/admin/CreateFeedback';
+import FeedbackResults from '../screens/admin/FeedbackResults';
 import AssignFacultySubject from '../screens/admin/AssignFacultySubject';
 import ManageRoleCodes from '../screens/admin/ManageRoleCodes';
 import ManageDepartments from '../screens/admin/ManageDepartments';
@@ -31,6 +35,8 @@ import TermsOfService from '../screens/common/TermsOfService';
 
 import StudentProfile from '../screens/student/StudentProfile';
 
+import SystemReset from '../screens/admin/SystemReset';
+
 const Stack = createStackNavigator();
 
 export default function AdminNavigator() {
@@ -39,12 +45,16 @@ export default function AdminNavigator() {
             <Stack.Screen name="Dashboard" component={AdminDashboard} options={{ title: 'Admin Panel' }} />
             <Stack.Screen name="ManageStudents" component={ManageStudents} />
             <Stack.Screen name="ManageFaculty" component={ManageFaculty} />
+            <Stack.Screen name="ManageHOD" component={ManageHOD} />
+            <Stack.Screen name="AddHOD" component={AddHOD} />
             <Stack.Screen name="AddFaculty" component={AddFaculty} />
             <Stack.Screen name="ManageSubjects" component={ManageSubjects} />
             <Stack.Screen name="AssignFacultySubject" component={AssignFacultySubject} />
             <Stack.Screen name="ManageEvents" component={ManageEvents} />
             <Stack.Screen name="AddEvent" component={AddEvent} />
             <Stack.Screen name="ManageFeedback" component={ManageFeedback} />
+            <Stack.Screen name="CreateFeedback" component={CreateFeedback} />
+            <Stack.Screen name="FeedbackResults" component={FeedbackResults} />
             <Stack.Screen name="ManageRoleCodes" component={ManageRoleCodes} />
             <Stack.Screen name="ManageDepartments" component={ManageDepartments} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
@@ -56,6 +66,7 @@ export default function AdminNavigator() {
             <Stack.Screen name="PrivacySettings" component={PrivacySettings} />
             <Stack.Screen name="HelpCenter" component={HelpCenter} />
             <Stack.Screen name="TermsOfService" component={TermsOfService} />
+            <Stack.Screen name="SystemReset" component={SystemReset} />
         </Stack.Navigator>
     );
 }

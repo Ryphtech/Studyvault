@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, 
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
-import { getUserProfile, getFacultyCourses, getStudentsForMarksEntry, saveMarksForCourse } from '../../services/supabaseService';
+import { getUserProfile, getFacultyCourses, getStudentsForMarksEntry, saveMarksForCourse, getMarksForCourse } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -60,6 +60,37 @@ export default function MarksUpload({ navigation }) {
     }, []);
 
     const currentMax = maxMarksMap[selectedTab] || DEFAULT_MAX;
+
+    // Fetch existing marks when course or tab changes
+    useEffect(() => {
+        const fetchExistingMarks = async () => {
+            if (!selectedCourse || students.length === 0) return;
+            const courseId = selectedCourse.code || selectedCourse.subjectCode;
+            if (!courseId) return;
+
+            const existingMarks = await getMarksForCourse(courseId, selectedTab);
+            
+            if (existingMarks && existingMarks.length > 0) {
+                const marksMap = {};
+                let foundMax = currentMax;
+                existingMarks.forEach(m => {
+                    marksMap[m.student_id] = String(m.score);
+                    foundMax = m.max_score;
+                });
+                
+                setMaxMarksMap(prev => ({ ...prev, [selectedTab]: foundMax }));
+                setStudents(prev => prev.map(s => ({ ...s, marks: marksMap[s.id] !== undefined ? marksMap[s.id] : '' })));
+                
+                // If it's a custom test that was loaded, add it to assessmentTypes if not there
+                if (!assessmentTypes.includes(selectedTab)) {
+                    setAssessmentTypes(prev => [...prev, selectedTab]);
+                }
+            } else {
+                setStudents(prev => prev.map(s => ({ ...s, marks: '' })));
+            }
+        };
+        fetchExistingMarks();
+    }, [selectedCourse, selectedTab]);
 
     // Recalculate average when students or tab change
     useEffect(() => {

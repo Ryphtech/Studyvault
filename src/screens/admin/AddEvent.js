@@ -5,25 +5,26 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { createEvent } from '../../services/supabaseService';
+import { createEvent, updateEvent, deleteEvent } from '../../services/supabaseService';
 
 const { width } = Dimensions.get('window');
 
 // List of categories
 const categories = ['Workshop', 'Seminar', 'Cultural', 'Sports'];
 
-export default function AddEvent({ navigation }) {
+export default function AddEvent({ navigation, route }) {
     const insets = useSafeAreaInsets();
+    const eventToEdit = route.params?.event;
 
     const [loading, setLoading] = useState(false);
 
-    const [imageUri, setImageUri] = useState(null);
-    const [title, setTitle] = useState('');
-    const [category, setCategory] = useState('');
+    const [imageUri, setImageUri] = useState(eventToEdit?.image || null);
+    const [title, setTitle] = useState(eventToEdit?.title || '');
+    const [category, setCategory] = useState(eventToEdit?.category || '');
 
     // Dates & Times
-    const [date, setDate] = useState(new Date());
-    const [startTime, setStartTime] = useState(new Date());
+    const [date, setDate] = useState(eventToEdit?.date ? new Date(eventToEdit.date) : new Date());
+    const [startTime, setStartTime] = useState(new Date()); // Time is parsed from eventToEdit.time if needed, but for now defaulting to now
     const [endTime, setEndTime] = useState(new Date((new Date()).getTime() + 60 * 60 * 1000)); // +1 hour
 
     // Picker visibility states
@@ -32,9 +33,9 @@ export default function AddEvent({ navigation }) {
     const [showEndTimePicker, setShowEndTimePicker] = useState(false);
     const [showCategoryPicker, setShowCategoryPicker] = useState(false);
 
-    const [location, setLocation] = useState('');
-    const [description, setDescription] = useState('');
-    const [registrationEnabled, setRegistrationEnabled] = useState(true);
+    const [location, setLocation] = useState(eventToEdit?.location || '');
+    const [description, setDescription] = useState(eventToEdit?.description || '');
+    const [registrationEnabled, setRegistrationEnabled] = useState(eventToEdit?.registration_enabled ?? true);
 
     const pickImage = async () => {
         let result = await ImagePicker.launchImageLibraryAsync({
@@ -57,32 +58,60 @@ export default function AddEvent({ navigation }) {
 
         setLoading(true);
 
-        const newEvent = {
+        const eventData = {
             title,
             category,
-            date: date.toISOString(), // Convert date to standard ISO 
+            date: date.toISOString(),
             time: `${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
             location,
             description,
             registrationEnabled,
             status: date > new Date() ? 'Upcoming' : 'Past',
-            image: imageUri || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80', // default image
+            image: imageUri || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
             month: date.toLocaleString('default', { month: 'short' }).toUpperCase(),
             dateNum: date.getDate().toString().padStart(2, '0'),
-            createdAt: new Date().toISOString()
         };
 
-        const result = await createEvent(newEvent);
+        let result;
+        if (eventToEdit) {
+            result = await updateEvent(eventToEdit.id, eventData);
+        } else {
+            result = await createEvent({ ...eventData, createdAt: new Date().toISOString() });
+        }
 
         setLoading(false);
 
         if (result.success) {
-            Alert.alert("Success", "Event created successfully!", [
+            Alert.alert("Success", `Event ${eventToEdit ? 'updated' : 'created'} successfully!`, [
                 { text: "OK", onPress: () => navigation.goBack() }
             ]);
         } else {
-            Alert.alert("Error", "Failed to create event.");
+            Alert.alert("Error", `Failed to ${eventToEdit ? 'update' : 'create'} event.`);
         }
+    };
+
+    const handleDeleteEvent = () => {
+        Alert.alert(
+            "Delete Event",
+            "Are you sure you want to delete this event? This action cannot be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                { 
+                    text: "Delete", 
+                    style: "destructive", 
+                    onPress: async () => {
+                        setLoading(true);
+                        const res = await deleteEvent(eventToEdit.id);
+                        setLoading(false);
+                        if (res.success) {
+                            navigation.goBack();
+                        } else {
+                            Alert.alert("Error", "Failed to delete event.");
+                        }
+                    } 
+                }
+            ]
+        );
     };
 
     return (
@@ -92,8 +121,14 @@ export default function AddEvent({ navigation }) {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
                     <MaterialCommunityIcons name="close" size={24} color="#1f2937" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Add New Event</Text>
-                <View style={{ width: 40 }} />
+                <Text style={styles.headerTitle}>{eventToEdit ? 'Edit Event' : 'Add New Event'}</Text>
+                {eventToEdit ? (
+                    <TouchableOpacity onPress={handleDeleteEvent} style={[styles.iconButton, { backgroundColor: '#fee2e2' }]}>
+                        <MaterialCommunityIcons name="trash-can-outline" size={24} color="#ef4444" />
+                    </TouchableOpacity>
+                ) : (
+                    <View style={{ width: 40 }} />
+                )}
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -274,7 +309,7 @@ export default function AddEvent({ navigation }) {
                     {loading ? (
                         <ActivityIndicator color="white" />
                     ) : (
-                        <Text style={styles.submitButtonText}>Create Event</Text>
+                    <Text style={styles.submitButtonText}>{eventToEdit ? 'Update Event' : 'Create Event'}</Text>
                     )}
                 </TouchableOpacity>
             </View>

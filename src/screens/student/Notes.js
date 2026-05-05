@@ -39,6 +39,11 @@ export default function NotesScreen({ navigation }) {
                 const dept = profile?.department || 'Computer Science';
                 setDepartment(dept);
 
+                if (profile?.semester) {
+                    const semNum = profile.semester.toString().replace(/\D/g, '');
+                    setSelectedSem(semNum || 'All');
+                }
+
                 // Fetch all notes for this department
                 const { data, error } = await supabase
                     .from('notes')
@@ -67,8 +72,16 @@ export default function NotesScreen({ navigation }) {
                 setLoading(false);
             }
         };
+
+        const unsubscribe = navigation.addListener('focus', () => {
+            loadData();
+        });
+
+        // Initial load
         loadData();
-    }, [user]);
+
+        return unsubscribe;
+    }, [navigation, user]);
 
     // Filter notes
     const filtered = notes.filter(n => {

@@ -24,6 +24,7 @@ import NotificationDetail from '../screens/common/NotificationDetail';
 import NotesScreen from '../screens/student/Notes';
 import ChatList from '../screens/common/ChatList';
 import ChatRoom from '../screens/common/ChatRoom';
+import Timetable from '../screens/student/Timetable';
 import NewChat from '../screens/common/NewChat';
 import PrivacySettings from '../screens/common/PrivacySettings';
 import HelpCenter from '../screens/common/HelpCenter';
@@ -93,6 +94,7 @@ export default function StudentNavigator() {
             {/* Screens that should hide the tab bar or be pushed on top */}
             <Stack.Screen name="Profile" component={StudentProfile} />
             <Stack.Screen name="Marks" component={MarksScreen} />
+            <Stack.Screen name="Timetable" component={Timetable} />
             <Stack.Screen name="Notes" component={NotesScreen} />
             <Stack.Screen name="ApplyDrive" component={ApplyDrive} />
             <Stack.Screen name="EditProfile" component={EditProfile} />
